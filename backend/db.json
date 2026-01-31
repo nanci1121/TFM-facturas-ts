@@ -1,0 +1,113 @@
+{
+  "usuarios": [
+    {
+      "id": "90983081-2b05-4b2b-96b5-a6a0bd62c5d0",
+      "email": "admin@sistema.com",
+      "password": "$2a$10$RAgX5lbkfadJdQQXJFHI1OGh0ms7u7SF.6lQ/FaUs0.OcrKSZ2Vzq",
+      "nombre": "Admin",
+      "apellido": "Sistema",
+      "rol": "admin",
+      "empresaId": "68596224-e08d-483c-b276-ae43fddc1af6",
+      "activo": true,
+      "createdAt": "2026-01-31T19:21:08.779Z",
+      "updatedAt": "2026-01-31T19:21:08.779Z"
+    }
+  ],
+  "empresas": [
+    {
+      "id": "68596224-e08d-483c-b276-ae43fddc1af6",
+      "nombre": "Mi Empresa S.A.",
+      "rfc": "MES123456ABC",
+      "direccion": "Av. Principal 123, Ciudad de México",
+      "telefono": "555-123-4567",
+      "email": "info@miempresa.com",
+      "configuracion": {
+        "monedaDefault": "MXN",
+        "impuestoDefault": 16,
+        "prefijoFactura": "A",
+        "numeracionActual": 2,
+        "iaProvider": "auto"
+      },
+      "activa": true
+    }
+  ],
+  "clientes": [
+    {
+      "id": "a63e212f-a4a8-4c2c-8370-9088c781240e",
+      "empresaId": "68596224-e08d-483c-b276-ae43fddc1af6",
+      "nombre": "Corporativo Global",
+      "rfc": "CGL880808XYZ",
+      "direccion": "Calle Falsa 123",
+      "telefono": "111-222-3333",
+      "email": "factura@global.com",
+      "contacto": "Juan Pérez",
+      "notas": "Cliente preferencial",
+      "activo": true
+    }
+  ],
+  "facturas": [
+    {
+      "id": "9aac58c4-de53-444b-bf3f-b01c39ab6ae3",
+      "empresaId": "68596224-e08d-483c-b276-ae43fddc1af6",
+      "clienteId": "a63e212f-a4a8-4c2c-8370-9088c781240e",
+      "numero": "A-1",
+      "serie": "A",
+      "folio": 1,
+      "fechaEmision": "2026-01-15T00:00:00.000Z",
+      "fechaVencimiento": "2026-02-15T00:00:00.000Z",
+      "fechaPago": "2026-01-20T00:00:00.000Z",
+      "estado": "pagada",
+      "metodoPago": "transferencia",
+      "subtotal": 1000,
+      "impuestos": 160,
+      "total": 1160,
+      "moneda": "MXN",
+      "notas": "Pago oportuno",
+      "items": [
+        {
+          "id": "6213af90-6f32-40fd-a11b-9da6c41d0e94",
+          "descripcion": "Consultoría TI",
+          "cantidad": 10,
+          "precioUnitario": 100,
+          "descuento": 0,
+          "impuesto": 16,
+          "total": 1160,
+          "unidad": "hora"
+        }
+      ],
+      "pagos": []
+    },
+    {
+      "id": "e1791daa-e500-4438-8779-f28d5a6d2812",
+      "empresaId": "68596224-e08d-483c-b276-ae43fddc1af6",
+      "clienteId": "a63e212f-a4a8-4c2c-8370-9088c781240e",
+      "numero": "A-2",
+      "serie": "A",
+      "folio": 2,
+      "fechaEmision": "2026-01-31T00:00:00.000Z",
+      "fechaVencimiento": "2026-02-28T00:00:00.000Z",
+      "fechaPago": null,
+      "estado": "pendiente",
+      "metodoPago": "transferencia",
+      "subtotal": 5000,
+      "impuestos": 800,
+      "total": 5800,
+      "moneda": "MXN",
+      "notas": "Pendiente de cobro",
+      "items": [
+        {
+          "id": "cdf17b99-ebbf-452c-a9f9-d300fe5431da",
+          "descripcion": "Desarrollo Software",
+          "cantidad": 1,
+          "precioUnitario": 5000,
+          "descuento": 0,
+          "impuesto": 16,
+          "total": 5800,
+          "unidad": "servicio"
+        }
+      ],
+      "pagos": []
+    }
+  ],
+  "pagos": []
+}

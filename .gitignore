@@ -1,0 +1,8 @@
+node_modules/
+.env
+dist/
+build/
+backend/uploads/facturas/procesadas/
+backend/uploads/facturas/errores/
+*.log
+.DS_Store

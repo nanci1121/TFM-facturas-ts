@@ -11,6 +11,10 @@
       "activo": true,
       "createdAt": "2026-01-31T19:21:08.779Z",
       "updatedAt": "2026-01-31T19:21:08.779Z"
+    },
+    {
+      "id": "test-123",
+      "name": "Test User"
     }
   ],
   "empresas": [

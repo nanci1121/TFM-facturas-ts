@@ -1,5 +1,5 @@
 {
-  "name": "sistema-facturas-backend",
+  "name": "facturas-ia-backend-ts",
   "version": "1.0.0",
   "description": "Backend para sistema de facturas con IA dual y RAG",
   "main": "dist/index.js",

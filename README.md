@@ -69,5 +69,12 @@ Esto asegura que cada cambio enviado al repositorio mantenga la calidad del cód
 
 ---
 
+## 🤖 Automatización y Reglas del Agente
+Este repositorio incluye configuraciones específicas para agentes de IA (como Antigravity) en la carpeta `.agent/`:
+- **Workflows**: Guías interactivas para iniciar el entorno, hacer seed de datos y ejecutar tests.
+- **Rules**: Estándares de código y seguridad para asegurar la consistencia del proyecto.
+
+---
+
 ## 📄 Licencia
 MIT

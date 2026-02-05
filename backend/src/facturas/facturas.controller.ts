@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { Database } from '../database';
 import { Factura, ItemFactura, Empresa } from '../types';
+import { FinanceUtils } from '../utils/finance';
 
 export const FacturasController = {
     async list(req: any, res: Response) {
@@ -58,22 +59,8 @@ export const FacturasController = {
 
             const nextFolio = (empresa.configuracion.numeracionActual || 0) + 1;
 
-            // Calculate totals
-            let subtotal = 0;
-            let impuestos = 0;
-
-            const processedItems: ItemFactura[] = items.map((it: any) => {
-                const itemTotal = it.cantidad * it.precioUnitario;
-                const itemImpuesto = itemTotal * (it.impuesto / 100);
-                subtotal += itemTotal;
-                impuestos += itemImpuesto;
-
-                return {
-                    id: uuidv4(),
-                    ...it,
-                    total: itemTotal + itemImpuesto
-                };
-            });
+            // Calculate totals using central finance utility
+            const totals = FinanceUtils.calculateInvoiceTotals(items);
 
             const newFactura: Factura = {
                 id: uuidv4(),
@@ -87,12 +74,12 @@ export const FacturasController = {
                 fechaPago: null,
                 estado: 'pendiente',
                 metodoPago: metodosPago || 'transferencia',
-                subtotal,
-                impuestos,
-                total: subtotal + impuestos,
+                subtotal: totals.subtotal,
+                impuestos: totals.impuestos,
+                total: totals.total,
                 moneda: moneda || empresa.configuracion.monedaDefault,
                 notas: notas || '',
-                items: processedItems,
+                items: totals.items,
                 pagos: []
             };
 

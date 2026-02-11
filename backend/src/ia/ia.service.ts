@@ -52,6 +52,7 @@ export class IAService {
                 prompt: fullPrompt,
                 stream: false
             });
+            console.log(`✅ Respuesta recibida de Ollama (${response.data.response.length} chars)`);
             return { response: response.data.response, provider: 'ollama' };
         } catch (error) {
             console.error('Error calling Ollama:', error);

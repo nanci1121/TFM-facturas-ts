@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import chokidar from 'chokidar';
-const pdf = require('pdf-parse');
+import { PDFParse } from 'pdf-parse';
 import { IAService } from '../ia/ia.service';
 import { Database } from '../database';
 import { v4 as uuidv4 } from 'uuid';
@@ -30,7 +30,8 @@ export class IngestionService {
 
     static async processInvoiceFromBuffer(buffer: Buffer, originalName: string) {
         try {
-            const pdfData = await pdf(buffer);
+            const parser = new PDFParse({ data: buffer });
+            const pdfData = await parser.getText();
             const text = pdfData.text;
             return await this.extractAndSave(text, originalName);
         } catch (error) {
@@ -74,9 +75,23 @@ export class IngestionService {
           "items": [{"descripcion": "string", "cantidad": number, "precio": number}]
         }`;
 
-        const result = await IAService.chat(prompt, "Eres un extractor de datos de PDF. Devuelve solo JSON.");
+        const result = await IAService.chat(prompt, "Eres un extractor de datos de PDF. Devuelve EXCLUSIVAMENTE el JSON, sin comentarios ni explicaciones.");
 
-        const jsonString = result.response.replace(/```json|```/g, '').trim();
+        // Clean up response to find the JSON block
+        let jsonString = result.response;
+        const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+
+        if (!jsonMatch) {
+            console.error('❌ La IA no devolvió un JSON válido:', result.response);
+            throw new Error('No se pudo encontrar un JSON válido en la respuesta de la IA');
+        }
+
+        jsonString = jsonMatch[0]
+            .replace(/\/\/.*$/gm, '') // Remove comments
+            .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
+            .trim();
+
+        console.log('DEBUG: Attempting to parse JSON string:', jsonString);
         const invoiceData = JSON.parse(jsonString);
 
         return await this.saveToSystem(invoiceData);

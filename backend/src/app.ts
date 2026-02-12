@@ -16,6 +16,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Servir archivos estáticos (PDFs de facturas)
+app.use('/uploads/facturas', express.static('uploads/facturas/procesadas'));
+
 // Basic health check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'Sistema de Facturas Backend is running' });

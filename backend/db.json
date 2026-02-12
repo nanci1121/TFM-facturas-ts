@@ -1,25 +1,21 @@
 {
   "usuarios": [
     {
-      "id": "90983081-2b05-4b2b-96b5-a6a0bd62c5d0",
+      "id": "37fbee76-0dc3-4c9f-9e07-4611af60b31c",
       "email": "admin@sistema.com",
-      "password": "$2a$10$RAgX5lbkfadJdQQXJFHI1OGh0ms7u7SF.6lQ/FaUs0.OcrKSZ2Vzq",
+      "password": "$2a$10$PATgkEdp/Ovzr3UWHkbYieddw/1XY.aMxHgJnQHVwqRUMStjYlI5C",
       "nombre": "Admin",
       "apellido": "Sistema",
       "rol": "admin",
-      "empresaId": "68596224-e08d-483c-b276-ae43fddc1af6",
+      "empresaId": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
       "activo": true,
-      "createdAt": "2026-01-31T19:21:08.779Z",
-      "updatedAt": "2026-01-31T19:21:08.779Z"
-    },
-    {
-      "id": "test-123",
-      "name": "Test User"
+      "createdAt": "2026-02-12T19:28:03.029Z",
+      "updatedAt": "2026-02-12T19:28:03.029Z"
     }
   ],
   "empresas": [
     {
-      "id": "68596224-e08d-483c-b276-ae43fddc1af6",
+      "id": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
       "nombre": "Mi Empresa S.A.",
       "rfc": "MES123456ABC",
       "direccion": "Av. Principal 123, Ciudad de México",
@@ -37,8 +33,8 @@
   ],
   "clientes": [
     {
-      "id": "a63e212f-a4a8-4c2c-8370-9088c781240e",
-      "empresaId": "68596224-e08d-483c-b276-ae43fddc1af6",
+      "id": "853c0f11-137b-4edb-97d9-d26cfde5e508",
+      "empresaId": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
       "nombre": "Corporativo Global",
       "rfc": "CGL880808XYZ",
       "direccion": "Calle Falsa 123",
@@ -47,67 +43,66 @@
       "contacto": "Juan Pérez",
       "notas": "Cliente preferencial",
       "activo": true
+    },
+    {
+      "id": "7e346525-a036-4c20-b5d8-4bd21cf02ad7",
+      "empresaId": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
+      "nombre": "Venancio M************",
+      "rfc": "PENDIENTE",
+      "email": "",
+      "activo": true
     }
   ],
   "facturas": [
     {
-      "id": "9aac58c4-de53-444b-bf3f-b01c39ab6ae3",
-      "empresaId": "68596224-e08d-483c-b276-ae43fddc1af6",
-      "clienteId": "a63e212f-a4a8-4c2c-8370-9088c781240e",
-      "numero": "A-1",
-      "serie": "A",
-      "folio": 1,
-      "fechaEmision": "2026-01-15T00:00:00.000Z",
-      "fechaVencimiento": "2026-02-15T00:00:00.000Z",
-      "fechaPago": "2026-01-20T00:00:00.000Z",
-      "estado": "pagada",
-      "metodoPago": "transferencia",
-      "subtotal": 1000,
-      "impuestos": 160,
-      "total": 1160,
-      "moneda": "MXN",
-      "notas": "Pago oportuno",
-      "items": [
-        {
-          "id": "6213af90-6f32-40fd-a11b-9da6c41d0e94",
-          "descripcion": "Consultoría TI",
-          "cantidad": 10,
-          "precioUnitario": 100,
-          "descuento": 0,
-          "impuesto": 16,
-          "total": 1160,
-          "unidad": "hora"
-        }
-      ],
-      "pagos": []
-    },
-    {
-      "id": "e1791daa-e500-4438-8779-f28d5a6d2812",
-      "empresaId": "68596224-e08d-483c-b276-ae43fddc1af6",
-      "clienteId": "a63e212f-a4a8-4c2c-8370-9088c781240e",
-      "numero": "A-2",
-      "serie": "A",
-      "folio": 2,
-      "fechaEmision": "2026-01-31T00:00:00.000Z",
-      "fechaVencimiento": "2026-02-28T00:00:00.000Z",
-      "fechaPago": null,
+      "id": "ecb1b560-4ce9-4182-93f6-1d573fe45a80",
+      "empresaId": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
+      "clienteId": "7e346525-a036-4c20-b5d8-4bd21cf02ad7",
+      "emisorNombre": "Telefónica de España, S.A,U.",
+      "clienteNombre": "Venancio M************",
+      "numero": "OM7VMAJ020*****260107-006-E0-032-021899",
+      "fechaEmision": "2026-01-07T00:00:00.000Z",
       "estado": "pendiente",
-      "metodoPago": "transferencia",
-      "subtotal": 5000,
-      "impuestos": 800,
-      "total": 5800,
-      "moneda": "MXN",
-      "notas": "Pendiente de cobro",
+      "total": 95,
+      "moneda": "EUR",
+      "categoria": "telecomunicaciones",
+      "iaProvider": "groq (llama-3.3-70b-versatile)",
+      "archivoOriginal": "1770924907221-2026-01-14 O2 Factura O2.pdf",
       "items": [
         {
-          "id": "cdf17b99-ebbf-452c-a9f9-d300fe5431da",
-          "descripcion": "Desarrollo Software",
+          "descripcion": "Cuotas mensuales",
           "cantidad": 1,
-          "precioUnitario": 5000,
-          "descuento": 0,
-          "impuesto": 16,
-          "total": 5800,
-          "unidad": "servicio"
+          "precio": 78.5121,
+          "id": "6b630e5f-080e-426e-a05f-93e257e087a6",
+          "total": 78.5121
+        },
+        {
+          "descripcion": "Línea Móvil adicional 300GB",
+          "cantidad": 3,
+          "precio": 12.3966,
+          "id": "fdc03af7-2f90-49df-a87b-b84d18150529",
+          "total": 37.1898
+        },
+        {
+          "descripcion": "Fibra 1Gb y Móvil 350GB",
+          "cantidad": 1,
+          "precio": 41.3223,
+          "id": "69640ab9-baec-4b7b-aa76-1401b4b26b5e",
+          "total": 41.3223
+        },
+        {
+          "descripcion": "O2 Cloud",
+          "cantidad": 1,
+          "precio": 0,
+          "id": "68b903a2-62ba-4133-b4d0-0fc11dd04908",
+          "total": 0
+        },
+        {
+          "descripcion": "Impuestos",
+          "cantidad": 1,
+          "precio": 16.4875,
+          "id": "5583cdeb-1fa3-4fec-961c-6b9b40e07c37",
+          "total": 16.4875
         }
       ],
       "pagos": []

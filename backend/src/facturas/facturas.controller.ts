@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Database } from '../database';
 import { Factura, ItemFactura, Empresa } from '../types';
 import { FinanceUtils } from '../utils/finance';
+import fs from 'fs';
+import path from 'path';
 
 export const FacturasController = {
     async list(req: any, res: Response) {
@@ -122,6 +124,42 @@ export const FacturasController = {
             res.json(factura);
         } catch (error) {
             res.status(500).json({ message: 'Error en el servidor', error });
+        }
+    },
+
+    async delete(req: any, res: Response) {
+        try {
+            const { id } = req.params;
+            const empresaId = req.user.empresaId;
+
+            const db = await Database.read();
+            const facturaABorrar = db.facturas.find(f => f.id === id && (req.user.rol === 'super_admin' || f.empresaId === empresaId));
+
+            if (!facturaABorrar) {
+                return res.status(404).json({ message: 'Factura no encontrada o sin permisos' });
+            }
+
+            // Eliminar archivo físico si existe
+            if (facturaABorrar.archivoOriginal) {
+                const PROCESSED_DIR = path.join(process.cwd(), 'uploads/facturas/procesadas');
+                const filePath = path.join(PROCESSED_DIR, facturaABorrar.archivoOriginal);
+
+                if (fs.existsSync(filePath)) {
+                    try {
+                        fs.unlinkSync(filePath);
+                        console.log(`🗑️ Archivo eliminado: ${facturaABorrar.archivoOriginal}`);
+                    } catch (err) {
+                        console.error(`❌ Error al eliminar el archivo ${filePath}:`, err);
+                    }
+                }
+            }
+
+            db.facturas = db.facturas.filter(f => f.id !== id);
+            await Database.write(db);
+
+            res.json({ message: 'Factura y archivo físico eliminados correctamente' });
+        } catch (error) {
+            res.status(500).json({ message: 'Error al eliminar factura', error });
         }
     }
 };

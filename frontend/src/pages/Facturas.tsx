@@ -6,17 +6,44 @@ const Facturas = () => {
     const [facturas, setFacturas] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
+    const [debugData, setDebugData] = useState<any>(null);
+    const [activeMenu, setActiveMenu] = useState<string | null>(null); // Nuevo estado para menu
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('¿Estás seguro de que deseas eliminar esta factura?')) return;
+        try {
+            await api.delete(`/facturas/${id}`);
+            fetchFacturas();
+        } catch (error) {
+            console.error('Error deleting invoice:', error);
+            alert('No se pudo eliminar la factura');
+        } finally {
+            setActiveMenu(null);
+        }
+    };
 
     const fetchFacturas = async () => {
         try {
             setLoading(true);
             const res = await api.get('/facturas');
             setFacturas(res.data);
+            fetchDebug(); // Aprovechamos para traer el debug
         } catch (error) {
             console.error('Error fetching facturas:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchDebug = async () => {
+        try {
+            const res = await api.get('/ia/debug');
+            if (res.data && res.data.prompt) {
+                setDebugData(res.data);
+            }
+        } catch (error) {
+            console.error('Error fetching debug data:', error);
         }
     };
 
@@ -33,14 +60,20 @@ const Facturas = () => {
 
         try {
             setUploading(true);
-            await api.post('/facturas/upload', formData, {
+            const res = await api.post('/facturas/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            alert('Factura procesada y añadida con éxito');
+
+            if (res.data.isDuplicate) {
+                alert(`⚠️ Factura duplicada: El documento de ${res.data.invoice.emisorNombre} (Nº ${res.data.invoice.numero}) ya estaba registrado.`);
+            } else {
+                alert('✅ Factura procesada y añadida con éxito');
+            }
             fetchFacturas(); // Recargar lista
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error uploading invoice:', error);
-            alert('Error al procesar la factura');
+            const message = error.response?.data?.message || 'Error al procesar la factura';
+            alert(`❌ ${message}`);
         } finally {
             setUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -64,6 +97,15 @@ const Facturas = () => {
                     <p className="text-gray-500 text-sm">Gestiona y consulta todas tus facturas emitidas.</p>
                 </div>
                 <div className="flex gap-2">
+                    <button
+                        onClick={fetchFacturas}
+                        disabled={loading}
+                        className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl transition-colors font-medium dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+                        title="Refrescar lista"
+                    >
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Filter className="w-5 h-5 rotate-180" />}
+                        <span className="ml-2 hidden md:inline">Actualizar</span>
+                    </button>
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -102,41 +144,91 @@ const Facturas = () => {
                     </button>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                <div className="overflow-x-auto pb-48">
+                    <table className="w-full text-left border-collapse">
                         <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 text-xs uppercase font-bold">
                             <tr>
-                                <th className="px-6 py-4">Número</th>
-                                <th className="px-6 py-4">Cliente</th>
-                                <th className="px-6 py-4">Fecha</th>
-                                <th className="px-6 py-4">Total</th>
-                                <th className="px-6 py-4">Estado</th>
-                                <th className="px-6 py-4 text-right">Acciones</th>
+                                <th className="px-6 py-4 min-w-[150px]">Número</th>
+                                <th className="px-6 py-4 min-w-[180px]">Emisor</th>
+                                <th className="px-6 py-4 min-w-[140px]">Categoría</th>
+                                <th className="px-6 py-4 min-w-[180px]">Cliente</th>
+                                <th className="px-6 py-4 min-w-[120px]">Fecha</th>
+                                <th className="px-6 py-4 min-w-[120px]">Total</th>
+                                <th className="px-6 py-4 text-center min-w-[180px]">IA Provider</th>
+                                <th className="px-6 py-4 min-w-[130px]">Estado</th>
+                                <th className={`px-6 py-4 text-right transition-all duration-300 ease-in-out ${activeMenu ? 'w-60' : 'w-24'}`}>
+                                    Acciones
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {loading ? (
-                                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 italic">Cargando facturas...</td></tr>
+                            {loading && facturas.length === 0 ? (
+                                <tr><td colSpan={9} className="px-6 py-8 text-center text-gray-400 italic">Cargando facturas...</td></tr>
                             ) : facturas.length === 0 ? (
-                                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 italic">No se encontraron facturas.</td></tr>
+                                <tr><td colSpan={9} className="px-6 py-8 text-center text-gray-400 italic">No se encontraron facturas.</td></tr>
                             ) : (
                                 facturas.map((f) => (
                                     <tr key={f.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                         <td className="px-6 py-4 font-semibold text-blue-600 dark:text-blue-400">{f.numero}</td>
-                                        <td className="px-6 py-4 text-gray-800 dark:text-gray-200">{f.clienteNombre || 'Sin cliente'}</td>
+                                        <td className="px-6 py-4 text-gray-800 dark:text-gray-200 font-medium">{f.emisorNombre || '—'}</td>
+                                        <td className="px-6 py-4">
+                                            <span className="text-[10px] bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400 px-2 py-1 rounded-md border border-purple-100 dark:border-purple-800/30 font-medium">
+                                                {f.categoria || 'otros'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400 text-sm">{f.clienteNombre || 'Sin cliente'}</td>
                                         <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-sm">
                                             {new Date(f.fechaEmision).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">${f.total.toLocaleString()}</td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="text-[10px] font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500">
+                                                {f.iaProvider || 'manual'}
+                                            </span>
+                                        </td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 rounded-full text-[10px] font-bold border uppercase ${getStatusColor(f.estado)}`}>
                                                 {f.estado}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                                        <td className={`px-6 py-4 text-right relative overflow-visible transition-all duration-300 ease-in-out ${activeMenu ? 'w-60' : 'w-24'}`}>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveMenu(activeMenu === f.id ? null : f.id);
+                                                }}
+                                                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                            >
                                                 <MoreVertical className="w-5 h-5 text-gray-400" />
                                             </button>
+
+                                            {activeMenu === f.id && (
+                                                <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[100] overflow-hidden translate-y-0 opacity-100">
+                                                    <div className="py-1">
+                                                        <button
+                                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center transition-colors"
+                                                            onClick={() => {
+                                                                if (f.archivoOriginal) {
+                                                                    window.open(`/uploads/facturas/${f.archivoOriginal}`, '_blank');
+                                                                } else {
+                                                                    alert('Esta factura no tiene un archivo físico asociado (es antigua o manual).');
+                                                                }
+                                                                setActiveMenu(null);
+                                                            }}
+                                                        >
+                                                            <FileText className="w-4 h-4 mr-3 text-blue-500" />
+                                                            Ver Factura PDF
+                                                        </button>
+                                                        <button
+                                                            className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center border-t border-gray-50 dark:border-gray-700 transition-colors"
+                                                            onClick={() => handleDelete(f.id)}
+                                                        >
+                                                            <Plus className="w-4 h-4 mr-3 rotate-45" />
+                                                            Eliminar Factura
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </td>
                                     </tr>
                                 ))
@@ -145,6 +237,40 @@ const Facturas = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Panel de Depuración (Sólo visible si hay datos) */}
+            {debugData && (
+                <div className="mt-12 bg-gray-900 rounded-2xl p-6 border border-yellow-500/30 shadow-2xl">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-yellow-500 font-bold flex items-center">
+                            <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2 animate-pulse"></span>
+                            IA DEBUG CONSOLE (Modo Desarrollo)
+                        </h3>
+                        <span className="text-xs text-gray-400 uppercase tracking-widest bg-gray-800 px-3 py-1 rounded-full border border-gray-700">
+                            Provider: <span className="text-blue-400 font-mono italic">{debugData.provider}</span>
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-tighter">Prompt Enviado (Extraído del PDF)</label>
+                            <textarea
+                                readOnly
+                                className="w-full h-64 bg-black/50 text-green-400 font-mono text-xs p-4 rounded-xl border border-gray-800 focus:outline-none resize-none"
+                                value={debugData.prompt}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-tighter">JSON Recibido (IA Output)</label>
+                            <textarea
+                                readOnly
+                                className="w-full h-64 bg-black/50 text-blue-300 font-mono text-xs p-4 rounded-xl border border-gray-800 focus:outline-none resize-none"
+                                value={debugData.response}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

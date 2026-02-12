@@ -27,5 +27,14 @@ export const IAController = {
         } catch (error: any) {
             res.status(500).json({ message: error.message });
         }
+    },
+
+    async getDebug(req: any, res: Response) {
+        try {
+            const lastInteraction = IAService.getLastInteraction();
+            res.json(lastInteraction || { message: 'No hay interacciones recientes' });
+        } catch (error: any) {
+            res.status(500).json({ message: error.message });
+        }
     }
 };

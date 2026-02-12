@@ -62,6 +62,7 @@ export interface Factura {
     notas: string;
     items: ItemFactura[];
     pagos: Pago[];
+    archivoOriginal?: string;
 }
 
 export interface ItemFactura {

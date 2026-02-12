@@ -15,6 +15,14 @@ export class IAService {
         return process.env.GEMINI_API_KEY;
     }
 
+    private static getGroqConfig() {
+        return {
+            key: process.env.GROQ_API_KEY,
+            model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+            url: 'https://api.groq.com/openai/v1/chat/completions'
+        };
+    }
+
     private static initGoogleAI() {
         const key = this.getGeminiKey();
         if (key && !this.googleAI) {
@@ -23,7 +31,10 @@ export class IAService {
         return this.googleAI;
     }
 
+    private static lastInteraction: { prompt: string; response: string; provider: string } | null = null;
+
     static async chat(prompt: string, context: string = ''): Promise<{ response: string; provider: string }> {
+        console.log('>>> IAService.chat CALLED');
         const systemPrompt = `Eres un asistente experto en contabilidad y finanzas para el sistema de facturas. 
     Usa la siguiente información del sistema para responder preguntas con precisión:
     ${context}
@@ -32,40 +43,85 @@ export class IAService {
 
         const fullPrompt = `${systemPrompt}\n\nUsuario: ${prompt}`;
 
-        // Prefer Gemini if available
+        let result: { response: string; provider: string } | null = null;
+
+        // 1. Prefer Gemini if available
         const ai = this.initGoogleAI();
         if (ai) {
+            console.log('🤖 Intentando con Gemini...');
             try {
                 const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
-                const result = await model.generateContent(fullPrompt);
-                return { response: result.response.text(), provider: 'gemini' };
+                const geminiResult = await model.generateContent(fullPrompt);
+                result = { response: geminiResult.response.text(), provider: 'gemini' };
             } catch (error) {
-                console.error('Error calling Gemini API, falling back to local Ollama:', error);
+                console.error('❌ Error en Gemini:', error);
             }
         }
 
-        // Fallback to Ollama
-        const ollama = this.getOllamaConfig();
-        try {
-            const response = await axios.post(`${ollama.url}/api/generate`, {
-                model: ollama.model,
-                prompt: fullPrompt,
-                stream: false
-            });
-            console.log(`✅ Respuesta recibida de Ollama (${response.data.response.length} chars)`);
-            return { response: response.data.response, provider: 'ollama' };
-        } catch (error) {
-            console.error('Error calling Ollama:', error);
-            throw new Error('No hay proveedores de IA disponibles. Verifica GEMINI_API_KEY o el servicio Ollama local.');
+        // 2. Then try Groq
+        if (!result) {
+            const groq = this.getGroqConfig();
+            console.log('DEBUG: Groq handle check:', { hasKey: !!groq.key, keyLength: groq.key?.length });
+            if (groq.key) {
+                console.log(`🤖 Intentando con Groq (Modelo: ${groq.model})...`);
+                try {
+                    const response = await axios.post(groq.url, {
+                        model: groq.model,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: prompt }
+                        ],
+                        temperature: 0.7
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${groq.key}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    console.log(`✅ Respuesta recibida de Groq (${response.data.choices[0].message.content.length} chars)`);
+                    result = { response: response.data.choices[0].message.content, provider: `groq (${groq.model})` };
+                } catch (error: any) {
+                    console.error('❌ Error en Groq:', error.response?.data || error.message);
+                }
+            }
         }
+
+        // 3. Fallback to Ollama
+        if (!result) {
+            console.log('🤖 Intentando con Ollama (Local)...');
+            const ollama = this.getOllamaConfig();
+            try {
+                const response = await axios.post(`${ollama.url}/api/generate`, {
+                    model: ollama.model,
+                    prompt: fullPrompt,
+                    stream: false
+                });
+                console.log(`✅ Respuesta recibida de Ollama (${response.data.response.length} chars)`);
+                result = { response: response.data.response, provider: `ollama (${ollama.model})` };
+            } catch (error) {
+                console.error('Error calling Ollama:', error);
+                throw new Error('IA_ERROR_M_1: No hay proveedores de IA disponibles. Verifica GEMINI_API_KEY, GROQ_API_KEY o el servicio Ollama local.');
+            }
+        }
+
+        this.lastInteraction = { prompt: fullPrompt, response: result.response, provider: result.provider };
+        return result;
+    }
+
+    static getLastInteraction() {
+        return this.lastInteraction;
     }
 
     static async checkStatus(): Promise<{ name: string; available: boolean }[]> {
         const status = [];
         const ollama = this.getOllamaConfig();
+        const groq = this.getGroqConfig();
 
         // Check Gemini
         status.push({ name: 'gemini', available: !!this.getGeminiKey() });
+
+        // Check Groq
+        status.push({ name: 'groq', available: !!groq.key });
 
         // Check Ollama
         try {
@@ -78,3 +134,4 @@ export class IAService {
         return status;
     }
 }
+

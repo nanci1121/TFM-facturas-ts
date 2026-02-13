@@ -1,13 +1,24 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Plus, Search, Filter, MoreVertical, FileText, Upload, Loader2 } from 'lucide-react';
 import api from '../services/api';
 
 const Facturas = () => {
     const [facturas, setFacturas] = useState<any[]>([]);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [pageSize, setPageSize] = useState(50);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [debugData, setDebugData] = useState<any>(null);
     const [activeMenu, setActiveMenu] = useState<string | null>(null); // Nuevo estado para menu
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterEstado, setFilterEstado] = useState('');
+    const [filterCategoria, setFilterCategoria] = useState('');
+    const [filterCliente, setFilterCliente] = useState('');
+    const [filterFromDate, setFilterFromDate] = useState('');
+    const [filterToDate, setFilterToDate] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleDelete = async (id: string) => {
@@ -26,8 +37,19 @@ const Facturas = () => {
     const fetchFacturas = async () => {
         try {
             setLoading(true);
-            const res = await api.get('/facturas');
-            setFacturas(res.data);
+            // Construir query params
+            const params: any = { page };
+            if (searchTerm) params.q = searchTerm;
+            if (filterEstado) params.estado = filterEstado;
+            if (filterCategoria) params.categoria = filterCategoria;
+            if (filterCliente) params.clienteNombre = filterCliente;
+            if (filterFromDate) params.from = filterFromDate;
+            if (filterToDate) params.to = filterToDate;
+            const res = await api.get('/facturas', { params });
+            setFacturas(res.data.data);
+            setTotalPages(res.data.totalPages);
+            setTotal(res.data.total);
+            setPageSize(res.data.pageSize);
             fetchDebug(); // Aprovechamos para traer el debug
         } catch (error) {
             console.error('Error fetching facturas:', error);
@@ -48,8 +70,24 @@ const Facturas = () => {
     };
 
     useEffect(() => {
+        setPage(1); // Reset page on filter/search change
+    }, [searchTerm, filterEstado, filterCategoria, filterCliente, filterFromDate, filterToDate]);
+
+    useEffect(() => {
         fetchFacturas();
-    }, []);
+        // eslint-disable-next-line
+    }, [searchTerm, filterEstado, filterCategoria, filterCliente, filterFromDate, filterToDate, page]);
+
+    const clientesOptions = useMemo(() => {
+        const unique = new Set<string>();
+        facturas.forEach((f) => {
+            if (f.clienteNombre) unique.add(f.clienteNombre);
+        });
+        return Array.from(unique).sort((a, b) => a.localeCompare(b));
+    }, [facturas]);
+
+    // Ya no filtramos en frontend, solo mostramos lo que devuelve el backend
+    const filteredFacturas = facturas;
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -135,14 +173,84 @@ const Facturas = () => {
                         <input
                             type="text"
                             placeholder="Buscar por número o cliente..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border-0 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
-                    <button className="flex items-center px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <button
+                        onClick={() => setFiltersOpen((prev) => !prev)}
+                        className="flex items-center px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
                         <Filter className="w-4 h-4 mr-2" />
                         Filtros
                     </button>
                 </div>
+                {filtersOpen && (
+                    <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-5 gap-3">
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-500">Estado</label>
+                            <select
+                                value={filterEstado}
+                                onChange={(e) => setFilterEstado(e.target.value)}
+                                className="w-full bg-gray-50 dark:bg-gray-900 border-0 rounded-xl text-sm px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">Todos</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="pagada">Pagada</option>
+                                <option value="vencida">Vencida</option>
+                                <option value="parcial">Parcial</option>
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-500">Categoria</label>
+                            <select
+                                value={filterCategoria}
+                                onChange={(e) => setFilterCategoria(e.target.value)}
+                                className="w-full bg-gray-50 dark:bg-gray-900 border-0 rounded-xl text-sm px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">Todas</option>
+                                <option value="alimentación">Alimentacion</option>
+                                <option value="telecomunicaciones">Telecomunicaciones</option>
+                                <option value="suministro eléctrico">Suministro electrico</option>
+                                <option value="agua">Agua</option>
+                                <option value="ocio">Ocio</option>
+                                <option value="otros">Otros</option>
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-500">Cliente</label>
+                            <select
+                                value={filterCliente}
+                                onChange={(e) => setFilterCliente(e.target.value)}
+                                className="w-full bg-gray-50 dark:bg-gray-900 border-0 rounded-xl text-sm px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">Todos</option>
+                                {clientesOptions.map((cliente) => (
+                                    <option key={cliente} value={cliente}>{cliente}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-500">Desde</label>
+                            <input
+                                type="date"
+                                value={filterFromDate}
+                                onChange={(e) => setFilterFromDate(e.target.value)}
+                                className="w-full bg-gray-50 dark:bg-gray-900 border-0 rounded-xl text-sm px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-500">Hasta</label>
+                            <input
+                                type="date"
+                                value={filterToDate}
+                                onChange={(e) => setFilterToDate(e.target.value)}
+                                className="w-full bg-gray-50 dark:bg-gray-900 border-0 rounded-xl text-sm px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                    </div>
+                )}
 
                 <div className="overflow-x-auto pb-48">
                     <table className="w-full text-left border-collapse">
@@ -164,11 +272,36 @@ const Facturas = () => {
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {loading && facturas.length === 0 ? (
                                 <tr><td colSpan={9} className="px-6 py-8 text-center text-gray-400 italic">Cargando facturas...</td></tr>
-                            ) : facturas.length === 0 ? (
-                                <tr><td colSpan={9} className="px-6 py-8 text-center text-gray-400 italic">No se encontraron facturas.</td></tr>
+                            ) : filteredFacturas.length === 0 ? (
+                                <tr><td colSpan={9} className="px-6 py-8 text-center text-gray-400 italic">No hay resultados con esos filtros.</td></tr>
                             ) : (
-                                facturas.map((f) => (
+                                filteredFacturas.map((f) => (
                                     <tr key={f.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                        {/* Paginación */}
+                                                        {totalPages > 1 && (
+                                                            <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                                                                <span className="text-sm text-gray-500">Mostrando página {page} de {totalPages} ({total} facturas)</span>
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        disabled={page === 1}
+                                                                        onClick={() => setPage(page - 1)}
+                                                                        className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+                                                                    >Anterior</button>
+                                                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                                                                        <button
+                                                                            key={p}
+                                                                            onClick={() => setPage(p)}
+                                                                            className={`px-3 py-1 rounded ${p === page ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                                                                        >{p}</button>
+                                                                    ))}
+                                                                    <button
+                                                                        disabled={page === totalPages}
+                                                                        onClick={() => setPage(page + 1)}
+                                                                        className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+                                                                    >Siguiente</button>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                         <td className="px-6 py-4 font-semibold text-blue-600 dark:text-blue-400">{f.numero}</td>
                                         <td className="px-6 py-4 text-gray-800 dark:text-gray-200 font-medium">{f.emisorNombre || '—'}</td>
                                         <td className="px-6 py-4">

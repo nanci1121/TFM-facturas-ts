@@ -7,5 +7,6 @@ const router = Router();
 router.get('/', authenticate, EmpresasController.list);
 router.post('/', authenticate, authorize(['super_admin']), EmpresasController.create);
 router.get('/:id', authenticate, EmpresasController.getById);
+router.put('/config', authenticate, EmpresasController.updateConfig);
 
 export default router;

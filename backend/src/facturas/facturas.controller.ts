@@ -9,7 +9,7 @@ import path from 'path';
 export const FacturasController = {
     async list(req: any, res: Response) {
         try {
-            const { estado, clienteId, page = 1 } = req.query;
+            const { q, estado, categoria, clienteNombre, from, to, page = 1 } = req.query;
             const empresaId = req.user.empresaId;
 
             if (!empresaId && req.user.rol !== 'super_admin') {
@@ -20,15 +20,13 @@ export const FacturasController = {
             let facturas = db.facturas;
             const clientes = db.clientes;
 
+            // Filtrar por empresa
             if (req.user.rol !== 'super_admin') {
                 facturas = facturas.filter(f => f.empresaId === empresaId);
             }
 
-            if (estado) facturas = facturas.filter(f => f.estado === estado as string);
-            if (clienteId) facturas = facturas.filter(f => f.clienteId === clienteId as string);
-
-            // Join with client name
-            const facturasConCliente = facturas.map(f => {
+            // JOIN con nombres de clientes para facilitar la búsqueda
+            let facturasCompletas = facturas.map(f => {
                 const cliente = clientes.find(c => c.id === f.clienteId);
                 return {
                     ...f,
@@ -36,13 +34,59 @@ export const FacturasController = {
                 };
             });
 
-            // Simple pagination
-            const limit = 50;
-            const offset = (Number(page) - 1) * limit;
-            const paginated = facturasConCliente.slice(offset, offset + limit);
+            // --- APLICAR FILTROS ---
 
-            res.json(paginated);
+            // 1. Búsqueda general (q) por número o nombre de cliente
+            if (q) {
+                const search = (q as string).toLowerCase();
+                facturasCompletas = facturasCompletas.filter(f =>
+                    f.numero.toLowerCase().includes(search) ||
+                    f.clienteNombre.toLowerCase().includes(search)
+                );
+            }
+
+            // 2. Estado
+            if (estado) {
+                facturasCompletas = facturasCompletas.filter(f => f.estado === estado);
+            }
+
+            // 3. Categoría
+            if (categoria) {
+                facturasCompletas = facturasCompletas.filter(f => f.categoria === categoria);
+            }
+
+            // 4. Nombre de cliente específico
+            if (clienteNombre) {
+                facturasCompletas = facturasCompletas.filter(f => f.clienteNombre === clienteNombre);
+            }
+
+            // 5. Rango de fechas
+            if (from) {
+                const fromDate = new Date(from as string);
+                facturasCompletas = facturasCompletas.filter(f => new Date(f.fechaEmision) >= fromDate);
+            }
+            if (to) {
+                const toDate = new Date(to as string);
+                facturasCompletas = facturasCompletas.filter(f => new Date(f.fechaEmision) <= toDate);
+            }
+
+            // --- PAGINACIÓN ---
+            const limit = 50;
+            const total = facturasCompletas.length;
+            const totalPages = Math.ceil(total / limit);
+            const offset = (Number(page) - 1) * limit;
+
+            const paginated = facturasCompletas.slice(offset, offset + limit);
+
+            res.json({
+                data: paginated,
+                total,
+                totalPages,
+                page: Number(page),
+                pageSize: limit
+            });
         } catch (error) {
+            console.error('Error in facturas.list:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     },
@@ -104,6 +148,39 @@ export const FacturasController = {
 
             if (!factura) return res.status(404).json({ message: 'Factura no encontrada' });
             res.json(factura);
+        } catch (error) {
+            res.status(500).json({ message: 'Error en el servidor', error });
+        }
+    },
+
+    async update(req: any, res: Response) {
+        try {
+            const { id } = req.params;
+            const updateData = req.body;
+            const empresaId = req.user.empresaId;
+
+            const db = await Database.read();
+            const index = db.facturas.findIndex(f => f.id === id && (req.user.rol === 'super_admin' || f.empresaId === empresaId));
+
+            if (index === -1) return res.status(404).json({ message: 'Factura no encontrada' });
+
+            // Solo permitimos actualizar ciertos campos para no romper la integridad financiera
+            const { clienteId, estado, categoria, notas, moneda, emisorNombre, numero } = updateData;
+
+            db.facturas[index] = {
+                ...db.facturas[index],
+                ...(clienteId && { clienteId }),
+                ...(estado && { estado }),
+                ...(categoria && { categoria }),
+                ...(notas !== undefined && { notas }),
+                ...(moneda && { moneda }),
+                ...(emisorNombre && { emisorNombre }),
+                ...(numero && { numero }),
+                updatedAt: new Date()
+            };
+
+            await Database.write(db);
+            res.json(db.facturas[index]);
         } catch (error) {
             res.status(500).json({ message: 'Error en el servidor', error });
         }

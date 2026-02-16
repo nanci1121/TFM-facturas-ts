@@ -11,6 +11,10 @@
       "activo": true,
       "createdAt": "2026-02-12T19:28:03.029Z",
       "updatedAt": "2026-02-12T19:28:03.029Z"
+    },
+    {
+      "id": "test-123",
+      "name": "Test User"
     }
   ],
   "empresas": [
@@ -26,7 +30,13 @@
         "impuestoDefault": 16,
         "prefijoFactura": "A",
         "numeracionActual": 2,
-        "iaProvider": "auto"
+        "iaProvider": "auto",
+        "aiConfig": {
+          "geminiKey": "",
+          "groqKey": "",
+          "selectedProvider": "openrouter",
+          "openrouterKey": "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"
+        }
       },
       "activa": true
     }
@@ -51,6 +61,22 @@
       "rfc": "PENDIENTE",
       "email": "",
       "activo": true
+    },
+    {
+      "id": "7405838e-761f-4fcf-aa30-0c89ea5e33aa",
+      "empresaId": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
+      "nombre": "Sr. Venancio Morales",
+      "rfc": "PENDIENTE",
+      "email": "",
+      "activo": true
+    },
+    {
+      "id": "89ede483-b00a-410a-8f29-a63392acaba3",
+      "empresaId": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
+      "nombre": "Cliente Desconocido",
+      "rfc": "PENDIENTE",
+      "email": "",
+      "activo": true
     }
   ],
   "facturas": [
@@ -62,7 +88,7 @@
       "clienteNombre": "Venancio M************",
       "numero": "OM7VMAJ020*****260107-006-E0-032-021899",
       "fechaEmision": "2026-01-07T00:00:00.000Z",
-      "estado": "pendiente",
+      "estado": "pagada",
       "total": 95,
       "moneda": "EUR",
       "categoria": "telecomunicaciones",
@@ -105,7 +131,568 @@
           "total": 16.4875
         }
       ],
+      "pagos": [],
+      "updatedAt": "2026-02-16T19:48:03.798Z"
+    },
+    {
+      "id": "80a7ec9e-8e95-4ef9-a5cf-d26d3d1a8789",
+      "empresaId": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
+      "clienteId": "7e346525-a036-4c20-b5d8-4bd21cf02ad7",
+      "emisorNombre": "MERCADONA, S.A.",
+      "clienteNombre": "Corporativo Global",
+      "numero": "4716-011-409643",
+      "fechaEmision": "2026-01-24T00:00:00.000Z",
+      "estado": "pagada",
+      "total": 100.5,
+      "moneda": "EUR",
+      "categoria": "alimentación",
+      "iaProvider": "groq (llama-3.3-70b-versatile)",
+      "archivoOriginal": "1771269825535-invoice-6956.pdf",
+      "items": [
+        {
+          "descripcion": "CANELONS",
+          "cantidad": 2,
+          "precio": 5.5,
+          "id": "37d9422e-31db-4488-b00a-200359b41926",
+          "total": 11
+        },
+        {
+          "descripcion": "BURGER M BOVÍ PORC",
+          "cantidad": 1,
+          "precio": 4.3,
+          "id": "aa8be28e-86df-453c-bf2b-436ea056d416",
+          "total": 4.3
+        },
+        {
+          "descripcion": "COGOMBRET AGR. GRAN",
+          "cantidad": 2,
+          "precio": 1.6,
+          "id": "b1799690-92b2-4423-a112-c989e15e0113",
+          "total": 3.2
+        },
+        {
+          "descripcion": "FORMATGE TALLS SEMI",
+          "cantidad": 1,
+          "precio": 2.51,
+          "id": "0adf38de-1be9-4b83-be03-2fa941846c9d",
+          "total": 2.51
+        },
+        {
+          "descripcion": "BOTIFARRA DE PAGES",
+          "cantidad": 1,
+          "precio": 4.57,
+          "id": "018396b0-568f-4126-a9f2-1f2c9fabdc24",
+          "total": 4.57
+        },
+        {
+          "descripcion": "SECRET PORC",
+          "cantidad": 1,
+          "precio": 2.68,
+          "id": "1db251bc-7260-4a7d-9b16-a2f0c065117f",
+          "total": 2.68
+        },
+        {
+          "descripcion": "LLET SENCERA P6",
+          "cantidad": 1,
+          "precio": 5.82,
+          "id": "b3881cb5-e5fe-4fb7-84a3-d6e7d00afb91",
+          "total": 5.82
+        },
+        {
+          "descripcion": "MONGETA 350 GR",
+          "cantidad": 1,
+          "precio": 1.7,
+          "id": "aecdb761-19a1-4b0d-ab5e-67ee4a677f72",
+          "total": 1.7
+        },
+        {
+          "descripcion": "FORMATGE FRESC CABRA",
+          "cantidad": 1,
+          "precio": 2.8,
+          "id": "fa75d176-aa89-4118-8705-ea583b809d2b",
+          "total": 2.8
+        },
+        {
+          "descripcion": "SECRET PORC",
+          "cantidad": 1,
+          "precio": 3.01,
+          "id": "5c70df30-750a-45f2-b111-5ce972c334b6",
+          "total": 3.01
+        },
+        {
+          "descripcion": "MESCLA 4 FORMATGES",
+          "cantidad": 1,
+          "precio": 1.83,
+          "id": "769fa311-5543-42ba-a019-9efd7daac244",
+          "total": 1.83
+        },
+        {
+          "descripcion": "CIREROL PERA KUMATO",
+          "cantidad": 1,
+          "precio": 1.6,
+          "id": "bdf901e0-32d0-4b3c-8c04-b12c5862c2e8",
+          "total": 1.6
+        },
+        {
+          "descripcion": "XAMPINYÓ PETIT",
+          "cantidad": 2,
+          "precio": 2.18,
+          "id": "2161ec85-dd39-40d2-ae99-defe3147403c",
+          "total": 4.36
+        },
+        {
+          "descripcion": "FIDEUÁ",
+          "cantidad": 3,
+          "precio": 5,
+          "id": "db1e7443-4a42-458c-b754-47990b39658a",
+          "total": 15
+        },
+        {
+          "descripcion": "B.MORO DOLÇ PAQUET-3",
+          "cantidad": 1,
+          "precio": 1.6,
+          "id": "3cfdbf75-ac3e-44a3-be53-8b4f9e06b87e",
+          "total": 1.6
+        },
+        {
+          "descripcion": "CARABASSA PART.",
+          "cantidad": 1,
+          "precio": 1.61,
+          "id": "d220a8b6-274a-4050-ba40-c9038ad603c4",
+          "total": 1.61
+        },
+        {
+          "descripcion": "CREMA 100% CACAUET",
+          "cantidad": 1,
+          "precio": 2.85,
+          "id": "54ab7546-d7d5-432d-a4f4-cad053b2b1c6",
+          "total": 2.85
+        },
+        {
+          "descripcion": "MONGETA BLANCA CUITA",
+          "cantidad": 1,
+          "precio": 0.8,
+          "id": "700cee4d-4422-4bd9-b445-d80df23896bb",
+          "total": 0.8
+        },
+        {
+          "descripcion": "FARCIMENT FAJITA",
+          "cantidad": 2,
+          "precio": 1.95,
+          "id": "cedd5641-1aff-45af-b950-e7d55bae2345",
+          "total": 3.9
+        },
+        {
+          "descripcion": "GYOZA POLLASTRE",
+          "cantidad": 2,
+          "precio": 2.15,
+          "id": "8bae6b7f-e1e2-490e-991e-895c0ff0c441",
+          "total": 4.3
+        },
+        {
+          "descripcion": "PATATA 3 KG",
+          "cantidad": 1,
+          "precio": 4.65,
+          "id": "df952db6-d31c-4174-876d-b35b81ffe0a9",
+          "total": 4.65
+        },
+        {
+          "descripcion": "TORTILLES MEXICANES",
+          "cantidad": 2,
+          "precio": 1.15,
+          "id": "65e7e1d5-a411-4585-b53c-de9a35490aa9",
+          "total": 2.3
+        },
+        {
+          "descripcion": "GALETA CARAMEL·LITZA",
+          "cantidad": 1,
+          "precio": 1.6,
+          "id": "ed8c5295-c313-4537-a2ba-80201813d018",
+          "total": 1.6
+        },
+        {
+          "descripcion": "NOU TROSSEJADA",
+          "cantidad": 1,
+          "precio": 1.9,
+          "id": "c09af32c-c2e5-464a-847c-0e28cc0bcdae",
+          "total": 1.9
+        },
+        {
+          "descripcion": "RIBES P-6X1,5L",
+          "cantidad": 1,
+          "precio": 3.54,
+          "id": "973f1ba7-a5bb-416b-af62-c01d7708996a",
+          "total": 3.54
+        },
+        {
+          "descripcion": "PERNIL C FL PACK 2",
+          "cantidad": 1,
+          "precio": 3.45,
+          "id": "4b430210-2353-49cf-a3f5-dd0d58ced608",
+          "total": 3.45
+        },
+        {
+          "descripcion": "PEBROT VERMELL",
+          "cantidad": 0.712,
+          "precio": 2.9,
+          "id": "bbc08266-b811-4edd-893c-71190c58bba4",
+          "total": 2.0648
+        },
+        {
+          "descripcion": "PEBROT FREGIR",
+          "cantidad": 0.622,
+          "precio": 2.5,
+          "id": "49a5e0d0-ee0b-4987-9358-0c00ef498789",
+          "total": 1.555
+        }
+      ],
+      "pagos": [],
+      "updatedAt": "2026-02-16T19:48:09.141Z"
+    },
+    {
+      "id": "5fea21f7-2a7c-4010-9231-4766835a2bb9",
+      "empresaId": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
+      "clienteId": "7405838e-761f-4fcf-aa30-0c89ea5e33aa",
+      "emisorNombre": "Digital Charging Solutions GmbH",
+      "clienteNombre": "Sr. Venancio Morales",
+      "numero": "KES00056805",
+      "fechaEmision": "2025-11-30T00:00:00.000Z",
+      "estado": "pendiente",
+      "total": 2,
+      "moneda": "EUR",
+      "categoria": "suministro eléctrico",
+      "iaProvider": "ollama (llama3.2:latest)",
+      "archivoOriginal": "1771272065234-2025-12-04 KIA INV_KES00056805.pdf",
+      "items": [
+        {
+          "descripcion": "Kia Charge \"Advanced\" Contrato 1",
+          "cantidad": 1,
+          "precio": 1.65,
+          "id": "d6604879-cff1-45c7-9e5f-657d451f75ac",
+          "total": 1.65
+        }
+      ],
       "pagos": []
+    },
+    {
+      "id": "6cbda17d-2870-4f96-8a6f-9f825d259f3b",
+      "empresaId": "f1ee9909-26e8-4311-8c37-bebd00ed2e7b",
+      "clienteId": "7405838e-761f-4fcf-aa30-0c89ea5e33aa",
+      "emisorNombre": "MERCADONA, S.A.",
+      "clienteNombre": "Cliente Desconocido",
+      "numero": "4716-017-078462",
+      "fechaEmision": "2025-12-06T00:00:00.000Z",
+      "estado": "pendiente",
+      "total": 139.82,
+      "moneda": "EUR",
+      "categoria": "alimentación",
+      "iaProvider": "openrouter (deepseek)",
+      "archivoOriginal": "1771281622612-2025-12-06 Mercadona 20251206 Mercadona 139,82 â¬.pdf",
+      "items": [
+        {
+          "descripcion": "RADLER 0`0 PACK 8",
+          "cantidad": 1,
+          "precio": 3.6,
+          "id": "5d2a5b98-29f5-4864-ac7d-ebce2fbfe22d",
+          "total": 3.6
+        },
+        {
+          "descripcion": "TRUITA 1/2 PAT/CAR",
+          "cantidad": 1,
+          "precio": 4.75,
+          "id": "32653ad7-f354-480e-8fd2-4c9c67c2cad8",
+          "total": 4.75
+        },
+        {
+          "descripcion": "ALBERGÍNIA FARCIDA",
+          "cantidad": 1,
+          "precio": 4.5,
+          "id": "99ce996b-4a93-434e-9d8a-6a1bebd337ae",
+          "total": 4.5
+        },
+        {
+          "descripcion": "ALBERGÍNIA FARCIDA",
+          "cantidad": 1,
+          "precio": 4.5,
+          "id": "8dc6e6ce-bccf-4f64-b53c-18d12116da32",
+          "total": 4.5
+        },
+        {
+          "descripcion": "POLLASTRE ROSTIT",
+          "cantidad": 1,
+          "precio": 9.5,
+          "id": "df96118f-bdde-4f6c-b7ec-596f793b5785",
+          "total": 9.5
+        },
+        {
+          "descripcion": "CHOC 85% CACAU",
+          "cantidad": 1,
+          "precio": 1.95,
+          "id": "89ac84fb-64d5-4cee-a767-f128c6f6df25",
+          "total": 1.95
+        },
+        {
+          "descripcion": "BASTONETS SEGÓ",
+          "cantidad": 2,
+          "precio": 0.9,
+          "id": "2e9c7430-d012-49d4-ba96-e8133503913a",
+          "total": 1.8
+        },
+        {
+          "descripcion": "CROSTONET TORRAT",
+          "cantidad": 1,
+          "precio": 0.66,
+          "id": "53db00d2-7406-4ef4-ab63-84614ffdb6a1",
+          "total": 0.66
+        },
+        {
+          "descripcion": "CROSTONET ALL",
+          "cantidad": 1,
+          "precio": 0.8,
+          "id": "4c760b04-ec68-4151-be9f-5a0ba3fb7f61",
+          "total": 0.8
+        },
+        {
+          "descripcion": "VITAMINA C + ZINC",
+          "cantidad": 1,
+          "precio": 1.95,
+          "id": "f976ef80-356c-4473-9492-391618c8cbb6",
+          "total": 1.95
+        },
+        {
+          "descripcion": "PA M.100% INTEGRAL",
+          "cantidad": 1,
+          "precio": 0.9,
+          "id": "d2e34927-dc46-453b-8fa3-b94120a0d0d7",
+          "total": 0.9
+        },
+        {
+          "descripcion": "DEO BOLA HOME",
+          "cantidad": 1,
+          "precio": 2.35,
+          "id": "57904cad-a575-4427-a963-f85a3e8fdf68",
+          "total": 2.35
+        },
+        {
+          "descripcion": "BROU PAELLA/MARISC",
+          "cantidad": 1,
+          "precio": 2,
+          "id": "49bed266-26c2-4660-8c81-175f9b3e1217",
+          "total": 2
+        },
+        {
+          "descripcion": "PUCETES 6 UN",
+          "cantidad": 1,
+          "precio": 1.04,
+          "id": "6fde516a-88db-4637-baa8-7b93c04093f9",
+          "total": 1.04
+        },
+        {
+          "descripcion": "GEL AFAITAR SENSIBLE",
+          "cantidad": 1,
+          "precio": 1.75,
+          "id": "97fea200-0fcc-4767-99e4-6387c94e4337",
+          "total": 1.75
+        },
+        {
+          "descripcion": "AIGUA OXIGENADA",
+          "cantidad": 1,
+          "precio": 0.65,
+          "id": "195d76de-9bb0-476a-8d82-0227b4b7aae5",
+          "total": 0.65
+        },
+        {
+          "descripcion": "LLAVOR GIRA-SOL GEG",
+          "cantidad": 2,
+          "precio": 1.2,
+          "id": "70a2c054-4075-4f67-9575-026d24fbf25b",
+          "total": 2.4
+        },
+        {
+          "descripcion": "NOU NATURAL",
+          "cantidad": 1,
+          "precio": 2.75,
+          "id": "acb7aba9-6c89-4d83-8dbf-d8c89420e5d5",
+          "total": 2.75
+        },
+        {
+          "descripcion": "FORMATGE DAUS AMANID",
+          "cantidad": 2,
+          "precio": 1.15,
+          "id": "35fa13d0-2884-4172-818a-6db8a39650b8",
+          "total": 2.3
+        },
+        {
+          "descripcion": "BURGER M BOVÍ PORC",
+          "cantidad": 1,
+          "precio": 4.3,
+          "id": "fb443790-7572-4f50-92fc-ae67beb4b5a0",
+          "total": 4.3
+        },
+        {
+          "descripcion": "FILET DE PIT CERT",
+          "cantidad": 1,
+          "precio": 4.75,
+          "id": "b6be2d23-3f85-449c-bae0-a6c1e74d46dc",
+          "total": 4.75
+        },
+        {
+          "descripcion": "BURGER BOVÍ PORC",
+          "cantidad": 1,
+          "precio": 4.5,
+          "id": "5bb2abfb-b722-4a9a-a56b-087cb2c8ef75",
+          "total": 4.5
+        },
+        {
+          "descripcion": "XAPATA VIDRE 4 U.",
+          "cantidad": 1,
+          "precio": 1.3,
+          "id": "284fc478-dbb8-40fb-80a0-cb5ca5243f56",
+          "total": 1.3
+        },
+        {
+          "descripcion": "SECRET PORC",
+          "cantidad": 1,
+          "precio": 3.35,
+          "id": "703c6f60-a972-4d40-a2c6-92e53665fcbf",
+          "total": 3.35
+        },
+        {
+          "descripcion": "CUIXETES CERT",
+          "cantidad": 1,
+          "precio": 3.67,
+          "id": "65bcca89-63ee-4b55-a568-34a70fff417e",
+          "total": 3.67
+        },
+        {
+          "descripcion": "INFUSÍO RESPIR",
+          "cantidad": 1,
+          "precio": 1.4,
+          "id": "d38575ba-e597-4766-8b59-e389afd7697c",
+          "total": 1.4
+        },
+        {
+          "descripcion": "HIGIÈNIC DOBLE ROTLL",
+          "cantidad": 1,
+          "precio": 4.5,
+          "id": "3c9436d3-30fc-44a3-88e7-f337162fb850",
+          "total": 4.5
+        },
+        {
+          "descripcion": "FORMATGE FRESC CABRA",
+          "cantidad": 1,
+          "precio": 2.8,
+          "id": "33c66ce2-c4e5-4814-8be1-4adb3d4df0dc",
+          "total": 2.8
+        },
+        {
+          "descripcion": "INFUSIÓ GINGEBRE",
+          "cantidad": 1,
+          "precio": 1.35,
+          "id": "7b495a67-b6dd-47f8-839d-4b5cb4f6149d",
+          "total": 1.35
+        },
+        {
+          "descripcion": "FORMATGE FETA",
+          "cantidad": 1,
+          "precio": 2.4,
+          "id": "f79b4417-9cef-499b-a0e1-8fe3a09a9c64",
+          "total": 2.4
+        },
+        {
+          "descripcion": "FORMATGE VELL TORRAT",
+          "cantidad": 1,
+          "precio": 19.97,
+          "id": "fbae0847-99f0-4a7a-adad-d84315539ef6",
+          "total": 19.97
+        },
+        {
+          "descripcion": "KETCHUP",
+          "cantidad": 1,
+          "precio": 1.15,
+          "id": "7575b871-b79d-4739-abbb-471bf55616c0",
+          "total": 1.15
+        },
+        {
+          "descripcion": "NOU BRASIL",
+          "cantidad": 1,
+          "precio": 4.95,
+          "id": "19ac0221-d1d1-43ed-ba6e-74aa9d835585",
+          "total": 4.95
+        },
+        {
+          "descripcion": "RESERVA TALLS",
+          "cantidad": 1,
+          "precio": 4.05,
+          "id": "03cacdc6-66be-489d-ba50-312bb15821d1",
+          "total": 4.05
+        },
+        {
+          "descripcion": "MANDARINA FULLA",
+          "cantidad": 1,
+          "precio": 1.5,
+          "id": "e0fc73ae-b4e4-426d-97cf-5932cdbe3bb1",
+          "total": 1.5
+        },
+        {
+          "descripcion": "RAÏM BLANC SESE PEP",
+          "cantidad": 1,
+          "precio": 3.93,
+          "id": "ce156c16-d8da-4369-b32d-4657be24a5a2",
+          "total": 3.93
+        },
+        {
+          "descripcion": "BOTIFARRA DE PAGES",
+          "cantidad": 1,
+          "precio": 4.37,
+          "id": "a8e26202-4ab1-452c-b43d-abffdc7c19f6",
+          "total": 4.37
+        },
+        {
+          "descripcion": "CEBA DE FIGUERES",
+          "cantidad": 1,
+          "precio": 1.9,
+          "id": "6e053bfc-c3a7-4da5-b742-d16d8a4ea310",
+          "total": 1.9
+        },
+        {
+          "descripcion": "RAÏM BLANC SESE PEP",
+          "cantidad": 1,
+          "precio": 3.56,
+          "id": "75f12b11-78b7-4cbd-8238-64610dcff209",
+          "total": 3.56
+        },
+        {
+          "descripcion": "POLVORÓ GRANEL",
+          "cantidad": 0.616,
+          "precio": 5.9,
+          "id": "a84b9ca7-31ae-458c-b442-4e73311b885c",
+          "total": 3.6344000000000003
+        },
+        {
+          "descripcion": "LLIMONA",
+          "cantidad": 0.59,
+          "precio": 2.55,
+          "id": "97570c24-a721-4c74-9219-43bf2b1f2f0a",
+          "total": 1.5044999999999997
+        },
+        {
+          "descripcion": "POMA GOLDEN",
+          "cantidad": 0.652,
+          "precio": 2,
+          "id": "9572b6db-f49d-4637-8218-7a1b1adba12e",
+          "total": 1.304
+        },
+        {
+          "descripcion": "BANANA",
+          "cantidad": 1.112,
+          "precio": 1.16,
+          "id": "3ed58d52-4dbb-4664-bd0d-29701354670a",
+          "total": 1.28992
+        }
+      ],
+      "pagos": [],
+      "updatedAt": "2026-02-16T22:42:02.124Z"
     }
   ],
   "pagos": []

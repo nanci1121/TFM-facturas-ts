@@ -20,7 +20,11 @@ jest.mock('../database', () => ({
 
 // Mock pdf-parse
 jest.mock('pdf-parse', () => {
-    return jest.fn().mockResolvedValue({ text: 'Texto de prueba de la factura' });
+    return {
+        PDFParse: jest.fn().mockImplementation(() => ({
+            getText: jest.fn().mockResolvedValue({ text: 'Texto de prueba de la factura' })
+        }))
+    };
 });
 
 import { IngestionService } from '../ia/ingestion.service';
@@ -35,6 +39,7 @@ describe('AI Extraction & Ingestion Tests', () => {
     it('should correctly parse AI response and save to database', async () => {
         const mockInvoiceData = {
             numero: "INV-001",
+            emisorNombre: "Emisor Test",
             clienteNombre: "Cliente de Prueba",
             fecha: "2023-10-27",
             total: 1160,
@@ -43,7 +48,8 @@ describe('AI Extraction & Ingestion Tests', () => {
         };
 
         (IAService.chat as jest.Mock).mockResolvedValue({
-            response: JSON.stringify(mockInvoiceData)
+            response: JSON.stringify(mockInvoiceData),
+            provider: 'test-provider'
         });
 
         (Database.read as jest.Mock).mockResolvedValue({
@@ -55,8 +61,8 @@ describe('AI Extraction & Ingestion Tests', () => {
         const buffer = Buffer.from('fake pdf content');
         const result = await IngestionService.processInvoiceFromBuffer(buffer, 'test.pdf');
 
-        expect(result.numero).toBe("INV-001");
-        expect(result.total).toBe(1160);
+        expect(result.invoice.numero).toBe("INV-001");
+        expect(result.invoice.total).toBe(1160);
         expect(Database.saveToCollection).toHaveBeenCalledWith('clientes', expect.any(Object));
         expect(Database.saveToCollection).toHaveBeenCalledWith('facturas', expect.any(Object));
     });
@@ -64,6 +70,7 @@ describe('AI Extraction & Ingestion Tests', () => {
     it('should handle malformed JSON from AI with cleaned markers', async () => {
         const mockRawResponse = "```json\n" + JSON.stringify({
             numero: "INV-MARKER",
+            emisorNombre: "Emisor Marker",
             clienteNombre: "Cliente Marker",
             fecha: "2023-10-27",
             total: 500,
@@ -71,11 +78,12 @@ describe('AI Extraction & Ingestion Tests', () => {
         }) + "\n```";
 
         (IAService.chat as jest.Mock).mockResolvedValue({
-            response: mockRawResponse
+            response: mockRawResponse,
+            provider: 'test-provider'
         });
 
         (Database.read as jest.Mock).mockResolvedValue({
-            clientes: [{ id: 'c1', nombre: 'Cliente Marker' }],
+            clientes: [{ id: 'c1', nombre: 'Cliente Marker', empresaId: 'empresa-1' }],
             empresas: [{ id: 'empresa-1' }],
             facturas: []
         });
@@ -83,7 +91,7 @@ describe('AI Extraction & Ingestion Tests', () => {
         const buffer = Buffer.from('fake pdf content');
         const result = await IngestionService.processInvoiceFromBuffer(buffer, 'test-markers.pdf');
 
-        expect(result.numero).toBe("INV-MARKER");
+        expect(result.invoice.numero).toBe("INV-MARKER");
         // Should NOT call saveToCollection for clients because it already exists
         expect(Database.saveToCollection).not.toHaveBeenCalledWith('clientes', expect.any(Object));
         expect(Database.saveToCollection).toHaveBeenCalledWith('facturas', expect.any(Object));

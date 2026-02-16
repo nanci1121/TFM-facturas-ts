@@ -1,9 +1,15 @@
 import axios from 'axios';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-export class IAService {
-    private static googleAI: GoogleGenerativeAI | null = null;
+export interface AIConfigOverride {
+    geminiKey?: string;
+    groqKey?: string;
+    openaiKey?: string;
+    openrouterKey?: string;
+    selectedProvider?: string;
+}
 
+export class IAService {
     private static getOllamaConfig() {
         return {
             url: process.env.OLLAMA_URL || 'http://localhost:11434',
@@ -11,59 +17,51 @@ export class IAService {
         };
     }
 
-    private static getGeminiKey() {
-        return process.env.GEMINI_API_KEY;
+    private static getGeminiKey(override?: AIConfigOverride) {
+        return override?.geminiKey || process.env.GEMINI_API_KEY;
     }
 
-    private static getGroqConfig() {
+    private static getGroqConfig(override?: AIConfigOverride) {
         return {
-            key: process.env.GROQ_API_KEY,
+            key: (override?.groqKey || process.env.GROQ_API_KEY)?.trim(),
             model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
             url: 'https://api.groq.com/openai/v1/chat/completions'
         };
     }
 
-    private static initGoogleAI() {
-        const key = this.getGeminiKey();
-        if (key && !this.googleAI) {
-            this.googleAI = new GoogleGenerativeAI(key);
-        }
-        return this.googleAI;
-    }
-
     private static lastInteraction: { prompt: string; response: string; provider: string } | null = null;
 
-    static async chat(prompt: string, context: string = ''): Promise<{ response: string; provider: string }> {
-        console.log('>>> IAService.chat CALLED');
+    static async chat(prompt: string, context: string = '', override?: AIConfigOverride): Promise<{ response: string; provider: string }> {
         const systemPrompt = `Eres un asistente experto en contabilidad y finanzas para el sistema de facturas. 
-    Usa la siguiente información del sistema para responder preguntas con precisión:
-    ${context}
-    
-    Responde de forma concisa y profesional. Si no sabes algo basado en el contexto, indícalo.`;
+        Usa la siguiente información del sistema para responder preguntas con precisión:
+        ${context}
+        
+        Responde de forma concisa y profesional. Si no sabes algo basado en el contexto, indícalo.`;
 
         const fullPrompt = `${systemPrompt}\n\nUsuario: ${prompt}`;
-
         let result: { response: string; provider: string } | null = null;
+        const forcedProvider = override?.selectedProvider;
 
-        // 1. Prefer Gemini if available
-        const ai = this.initGoogleAI();
-        if (ai) {
-            console.log('🤖 Intentando con Gemini...');
-            try {
-                const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
-                const geminiResult = await model.generateContent(fullPrompt);
-                result = { response: geminiResult.response.text(), provider: 'gemini' };
-            } catch (error) {
-                console.error('❌ Error en Gemini:', error);
+        // 1. Try Gemini
+        if (!result && (!forcedProvider || forcedProvider === 'gemini' || forcedProvider === 'auto')) {
+            const geminiKey = this.getGeminiKey(override)?.trim();
+            if (geminiKey) {
+                try {
+                    const genAI = new GoogleGenerativeAI(geminiKey);
+                    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+                    const geminiResult = await model.generateContent(fullPrompt);
+                    result = { response: geminiResult.response.text(), provider: 'gemini' };
+                } catch (error) {
+                    console.error('❌ Error en Gemini:', error);
+                    if (forcedProvider === 'gemini') throw error;
+                }
             }
         }
 
-        // 2. Then try Groq
-        if (!result) {
-            const groq = this.getGroqConfig();
-            console.log('DEBUG: Groq handle check:', { hasKey: !!groq.key, keyLength: groq.key?.length });
+        // 2. Try Groq
+        if (!result && (!forcedProvider || forcedProvider === 'groq' || forcedProvider === 'auto')) {
+            const groq = this.getGroqConfig(override);
             if (groq.key) {
-                console.log(`🤖 Intentando con Groq (Modelo: ${groq.model})...`);
                 try {
                     const response = await axios.post(groq.url, {
                         model: groq.model,
@@ -78,17 +76,47 @@ export class IAService {
                             'Content-Type': 'application/json'
                         }
                     });
-                    console.log(`✅ Respuesta recibida de Groq (${response.data.choices[0].message.content.length} chars)`);
                     result = { response: response.data.choices[0].message.content, provider: `groq (${groq.model})` };
                 } catch (error: any) {
                     console.error('❌ Error en Groq:', error.response?.data || error.message);
+                    if (forcedProvider === 'groq') throw error;
                 }
             }
         }
 
-        // 3. Fallback to Ollama
-        if (!result) {
-            console.log('🤖 Intentando con Ollama (Local)...');
+        // 3. Try OpenRouter (DeepSeek)
+        if (!result && (!forcedProvider || forcedProvider === 'openrouter' || forcedProvider === 'auto')) {
+            const orKey = override?.openrouterKey || process.env.OPENROUTER_API_KEY;
+            if (orKey) {
+                try {
+                    const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                        model: 'deepseek/deepseek-chat',
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: prompt }
+                        ]
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${orKey}`,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': 'http://localhost:3000',
+                            'X-Title': 'FacturaIA Project'
+                        },
+                        timeout: 30000
+                    });
+                    result = { response: response.data.choices[0].message.content, provider: 'openrouter (deepseek)' };
+                } catch (error: any) {
+                    const errorDetail = error.response?.data?.error?.message || error.response?.data || error.message;
+                    console.error('❌ Error en OpenRouter:', errorDetail);
+                    if (forcedProvider === 'openrouter') {
+                        throw new Error(`OpenRouter Error: ${errorDetail}`);
+                    }
+                }
+            }
+        }
+
+        // 4. Fallback to Ollama
+        if (!result && (!forcedProvider || forcedProvider === 'ollama' || forcedProvider === 'auto')) {
             const ollama = this.getOllamaConfig();
             try {
                 const response = await axios.post(`${ollama.url}/api/generate`, {
@@ -96,12 +124,15 @@ export class IAService {
                     prompt: fullPrompt,
                     stream: false
                 });
-                console.log(`✅ Respuesta recibida de Ollama (${response.data.response.length} chars)`);
                 result = { response: response.data.response, provider: `ollama (${ollama.model})` };
             } catch (error) {
                 console.error('Error calling Ollama:', error);
-                throw new Error('IA_ERROR_M_1: No hay proveedores de IA disponibles. Verifica GEMINI_API_KEY, GROQ_API_KEY o el servicio Ollama local.');
+                if (forcedProvider === 'ollama') throw error;
             }
+        }
+
+        if (!result) {
+            throw new Error(`Error de IA: No se pudo obtener respuesta de ningún proveedor (Gemini, Groq, OpenRouter u Ollama). Por favor, verifica tus claves API en la configuración.`);
         }
 
         this.lastInteraction = { prompt: fullPrompt, response: result.response, provider: result.provider };
@@ -112,16 +143,38 @@ export class IAService {
         return this.lastInteraction;
     }
 
-    static async checkStatus(): Promise<{ name: string; available: boolean }[]> {
+    static async checkStatus(override?: AIConfigOverride): Promise<{ name: string; available: boolean }[]> {
         const status = [];
         const ollama = this.getOllamaConfig();
-        const groq = this.getGroqConfig();
+        const groq = this.getGroqConfig(override);
+        const geminiKey = this.getGeminiKey(override);
 
         // Check Gemini
-        status.push({ name: 'gemini', available: !!this.getGeminiKey() });
+        try {
+            if (!geminiKey) throw new Error();
+            const genAI = new GoogleGenerativeAI(geminiKey);
+            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+            await model.generateContent("ping");
+            status.push({ name: 'gemini', available: true });
+        } catch {
+            status.push({ name: 'gemini', available: false });
+        }
 
         // Check Groq
-        status.push({ name: 'groq', available: !!groq.key });
+        try {
+            if (!groq.key) throw new Error();
+            await axios.post(groq.url, {
+                model: groq.model,
+                messages: [{ role: 'user', content: 'ping' }],
+                max_tokens: 1
+            }, {
+                headers: { 'Authorization': `Bearer ${groq.key}` },
+                timeout: 3000
+            });
+            status.push({ name: 'groq', available: true });
+        } catch {
+            status.push({ name: 'groq', available: false });
+        }
 
         // Check Ollama
         try {
@@ -131,7 +184,26 @@ export class IAService {
             status.push({ name: 'ollama', available: false });
         }
 
+        // Check OpenRouter
+        const orKey = override?.openrouterKey || process.env.OPENROUTER_API_KEY;
+        if (orKey) {
+            try {
+                await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                    model: 'deepseek/deepseek-chat',
+                    messages: [{ role: 'user', content: 'ping' }],
+                    max_tokens: 1
+                }, {
+                    headers: { 'Authorization': `Bearer ${orKey}` },
+                    timeout: 5000
+                });
+                status.push({ name: 'openrouter', available: true });
+            } catch {
+                status.push({ name: 'openrouter', available: false });
+            }
+        } else {
+            status.push({ name: 'openrouter', available: false });
+        }
+
         return status;
     }
 }
-

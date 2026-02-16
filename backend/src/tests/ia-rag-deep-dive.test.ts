@@ -76,7 +76,7 @@ describe('Deep Dive: AI & RAG Integration', () => {
 
             const result = await IAService.chat(mockPrompt, mockContext);
 
-            expect(result.provider).toBe('ollama');
+            expect(result.provider).toMatch(/ollama/);
             expect(result.response).toBe('Debes 500 pesos');
             expect(axios.post).toHaveBeenCalledWith(
                 expect.stringContaining('/api/generate'),
@@ -102,7 +102,7 @@ describe('Deep Dive: AI & RAG Integration', () => {
 
             const result = await IAService.chat('Hola', 'Contexto');
 
-            expect(result.provider).toBe('ollama');
+            expect(result.provider).toMatch(/ollama/);
             expect(mockGenerateContent).toHaveBeenCalled();
             expect(result.response).toBe('Respuesta de Ollama');
         });

@@ -23,7 +23,14 @@ export interface Empresa {
         impuestoDefault: number;
         prefijoFactura: string;
         numeracionActual: number;
-        iaProvider: 'local' | 'api' | 'auto';
+        iaProvider: 'gemini' | 'groq' | 'ollama' | 'auto';
+        aiConfig?: {
+            geminiKey?: string;
+            groqKey?: string;
+            openaiKey?: string;
+            openrouterKey?: string;
+            selectedProvider?: 'gemini' | 'groq' | 'ollama' | 'openrouter' | 'auto';
+        };
     };
     activa: boolean;
 }

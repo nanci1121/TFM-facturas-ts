@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Plus, Search, Filter, MoreVertical, FileText, Upload, Loader2 } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, FileText, Upload, Loader2, AlertCircle } from 'lucide-react';
 import api from '../services/api';
 
 const Facturas = () => {
@@ -19,6 +19,9 @@ const Facturas = () => {
     const [filterCliente, setFilterCliente] = useState('');
     const [filterFromDate, setFilterFromDate] = useState('');
     const [filterToDate, setFilterToDate] = useState('');
+    const [iaStatus, setIaStatus] = useState<{ name: string; available: boolean }[]>([]);
+    const [editingFactura, setEditingFactura] = useState<any>(null);
+    const [clientes, setClientes] = useState<any[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleDelete = async (id: string) => {
@@ -34,6 +37,28 @@ const Facturas = () => {
         }
     };
 
+    const handleUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingFactura) return;
+        try {
+            await api.put(`/facturas/${editingFactura.id}`, editingFactura);
+            setEditingFactura(null);
+            fetchFacturas();
+        } catch (error) {
+            console.error('Error updating invoice:', error);
+            alert('No se pudo actualizar la factura');
+        }
+    };
+
+    const fetchClientes = async () => {
+        try {
+            const res = await api.get('/clientes');
+            setClientes(res.data);
+        } catch (error) {
+            console.error('Error fetching clientes:', error);
+        }
+    };
+
     const fetchFacturas = async () => {
         try {
             setLoading(true);
@@ -46,13 +71,21 @@ const Facturas = () => {
             if (filterFromDate) params.from = filterFromDate;
             if (filterToDate) params.to = filterToDate;
             const res = await api.get('/facturas', { params });
-            setFacturas(res.data.data);
-            setTotalPages(res.data.totalPages);
-            setTotal(res.data.total);
-            setPageSize(res.data.pageSize);
-            fetchDebug(); // Aprovechamos para traer el debug
+
+            // Defensive check: handle both direct array or paginated object structure
+            const dataArr = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            const totalP = res.data?.totalPages || 1;
+            const totalF = res.data?.total || dataArr.length;
+            const size = res.data?.pageSize || 50;
+
+            setFacturas(dataArr);
+            setTotalPages(totalP);
+            setTotal(totalF);
+            setPageSize(size);
+            fetchDebug();
         } catch (error) {
             console.error('Error fetching facturas:', error);
+            setFacturas([]); // Clear on error to avoid stale/infinite loading
         } finally {
             setLoading(false);
         }
@@ -73,8 +106,19 @@ const Facturas = () => {
         setPage(1); // Reset page on filter/search change
     }, [searchTerm, filterEstado, filterCategoria, filterCliente, filterFromDate, filterToDate]);
 
+    const fetchIAStatus = async () => {
+        try {
+            const res = await api.get('/ia/status');
+            setIaStatus(res.data.providers || []);
+        } catch (error) {
+            console.error('Error fetching IA status:', error);
+        }
+    };
+
     useEffect(() => {
         fetchFacturas();
+        fetchIAStatus();
+        fetchClientes();
         // eslint-disable-next-line
     }, [searchTerm, filterEstado, filterCategoria, filterCliente, filterFromDate, filterToDate, page]);
 
@@ -165,6 +209,20 @@ const Facturas = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Aviso de IA no disponible */}
+            {iaStatus.length > 0 && !iaStatus.some(p => p.available) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 shadow-sm">
+                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                    <div>
+                        <h4 className="text-sm font-bold text-amber-800">Conexión con IA no disponible</h4>
+                        <p className="text-xs text-amber-700 mt-1">
+                            Ningún proveedor de IA (Gemini, Groq u Ollama) está respondiendo.
+                            Podrás subir facturas, pero no se extraerán los datos automáticamente hasta que configures una clave válida en el servidor.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                 <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-col md:flex-row gap-4">
@@ -277,31 +335,6 @@ const Facturas = () => {
                             ) : (
                                 filteredFacturas.map((f) => (
                                     <tr key={f.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                                        {/* Paginación */}
-                                                        {totalPages > 1 && (
-                                                            <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                                                                <span className="text-sm text-gray-500">Mostrando página {page} de {totalPages} ({total} facturas)</span>
-                                                                <div className="flex gap-2">
-                                                                    <button
-                                                                        disabled={page === 1}
-                                                                        onClick={() => setPage(page - 1)}
-                                                                        className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-50"
-                                                                    >Anterior</button>
-                                                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                                                        <button
-                                                                            key={p}
-                                                                            onClick={() => setPage(p)}
-                                                                            className={`px-3 py-1 rounded ${p === page ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-                                                                        >{p}</button>
-                                                                    ))}
-                                                                    <button
-                                                                        disabled={page === totalPages}
-                                                                        onClick={() => setPage(page + 1)}
-                                                                        className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-50"
-                                                                    >Siguiente</button>
-                                                                </div>
-                                                            </div>
-                                                        )}
                                         <td className="px-6 py-4 font-semibold text-blue-600 dark:text-blue-400">{f.numero}</td>
                                         <td className="px-6 py-4 text-gray-800 dark:text-gray-200 font-medium">{f.emisorNombre || '—'}</td>
                                         <td className="px-6 py-4">
@@ -353,6 +386,16 @@ const Facturas = () => {
                                                             Ver Factura PDF
                                                         </button>
                                                         <button
+                                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center transition-colors"
+                                                            onClick={() => {
+                                                                setEditingFactura(f);
+                                                                setActiveMenu(null);
+                                                            }}
+                                                        >
+                                                            <Filter className="w-4 h-4 mr-3 text-amber-500" />
+                                                            Editar Datos
+                                                        </button>
+                                                        <button
                                                             className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center border-t border-gray-50 dark:border-gray-700 transition-colors"
                                                             onClick={() => handleDelete(f.id)}
                                                         >
@@ -369,6 +412,56 @@ const Facturas = () => {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Paginación */}
+                {totalPages > 1 && (
+                    <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                        <span className="text-sm text-gray-500 font-medium dark:text-gray-400">
+                            Página <span className="text-gray-900 dark:text-white">{page}</span> de {totalPages}
+                            <span className="mx-2 text-gray-300">|</span>
+                            Total: <span className="text-gray-900 dark:text-white">{total}</span> facturas
+                        </span>
+                        <div className="flex gap-1">
+                            <button
+                                disabled={page === 1}
+                                onClick={() => setPage(page - 1)}
+                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                            >
+                                Anterior
+                            </button>
+
+                            {/* Mostrar solo algunas páginas si hay muchas */}
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                                // Mostrar primera, última y alrededor de la actual
+                                if (p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1)) {
+                                    return (
+                                        <button
+                                            key={p}
+                                            onClick={() => setPage(p)}
+                                            className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${p === page
+                                                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                                                : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    );
+                                } else if (p === page - 2 || p === page + 2) {
+                                    return <span key={p} className="px-1 text-gray-400">...</span>;
+                                }
+                                return null;
+                            })}
+
+                            <button
+                                disabled={page === totalPages}
+                                onClick={() => setPage(page + 1)}
+                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                            >
+                                Siguiente
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Panel de Depuración (Sólo visible si hay datos) */}
@@ -401,6 +494,86 @@ const Facturas = () => {
                                 value={debugData.response}
                             />
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Edición */}
+            {editingFactura && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-700 text-left">
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-white">Editar Factura</h3>
+                            <p className="text-sm text-gray-500">Corrige los datos asignados a esta factura.</p>
+                        </div>
+                        <form onSubmit={handleUpdate} className="p-6 space-y-4 text-left">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Empresa/Emisor</label>
+                                <input
+                                    type="text"
+                                    value={editingFactura.emisorNombre || ''}
+                                    onChange={(e) => setEditingFactura({ ...editingFactura, emisorNombre: e.target.value })}
+                                    className="w-full bg-gray-50 dark:bg-gray-900 border-0 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cliente Asignado</label>
+                                <select
+                                    value={editingFactura.clienteId || ''}
+                                    onChange={(e) => setEditingFactura({ ...editingFactura, clienteId: e.target.value })}
+                                    className="w-full bg-gray-50 dark:bg-gray-900 border-0 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+                                >
+                                    <option value="">Seleccionar cliente</option>
+                                    {clientes.map(c => (
+                                        <option key={c.id} value={c.id}>{c.nombre}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label>
+                                    <select
+                                        value={editingFactura.estado || ''}
+                                        onChange={(e) => setEditingFactura({ ...editingFactura, estado: e.target.value })}
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border-0 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="pendiente">Pendiente</option>
+                                        <option value="pagada">Pagada</option>
+                                        <option value="vencida">Vencida</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoría</label>
+                                    <select
+                                        value={editingFactura.categoria || ''}
+                                        onChange={(e) => setEditingFactura({ ...editingFactura, categoria: e.target.value })}
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border-0 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="alimentación">Alimentación</option>
+                                        <option value="telecomunicaciones">Telecomunicaciones</option>
+                                        <option value="suministro eléctrico">Suministro Eléctrico</option>
+                                        <option value="agua">Agua</option>
+                                        <option value="ocio">Ocio</option>
+                                        <option value="otros">Otros</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingFactura(null)}
+                                    className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-xl text-sm font-bold hover:bg-gray-200 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors"
+                                >
+                                    Guardar Cambios
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

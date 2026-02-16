@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import IAChat from './pages/IAChat';
 import Facturas from './pages/Facturas';
+import Configuracion from './pages/Configuracion';
 import Login from './pages/Login';
 import { useAuthStore } from './store/authStore';
 
@@ -27,6 +28,7 @@ function App() {
                                     <Route path="/" element={<Dashboard />} />
                                     <Route path="/facturas" element={<Facturas />} />
                                     <Route path="/ia" element={<IAChat />} />
+                                    <Route path="/settings" element={<Configuracion />} />
                                     <Route path="*" element={<div className="p-8 text-center text-xl">Próximamente...</div>} />
                                 </Routes>
                             </Layout>

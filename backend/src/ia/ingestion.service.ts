@@ -34,11 +34,21 @@ export class IngestionService {
 
     static async processInvoiceFromBuffer(buffer: Buffer, originalName: string, empresaId?: string) {
         try {
-            const parser = new PDFParse({ data: buffer });
+            console.log(`📄 Analizando PDF: ${originalName} (${buffer.length} bytes)`);
+
+            // Usando la clase PDFParse que parece ser la correcta para esta versión instalada
+            const parser = new (PDFParse as any)({ data: buffer });
             const pdfData = await parser.getText();
             const text = pdfData.text;
+
+            if (!text || text.trim().length < 10) {
+                console.warn('⚠️ El PDF parece estar vacío o no se pudo extraer texto.');
+            } else {
+                console.log(`✅ Texto extraído correctamente (${text.length} caracteres)`);
+            }
+
             return await this.extractAndSave(text, originalName, empresaId);
-        } catch (error) {
+        } catch (error: any) {
             console.error(`❌ Error procesando buffer de ${originalName}:`, error);
             throw error;
         }
@@ -50,10 +60,12 @@ export class IngestionService {
             const invoice = await this.processInvoiceFromBuffer(dataBuffer, path.basename(filePath));
 
             // Move to processed
+            if (!fs.existsSync(PROCESSED_DIR)) fs.mkdirSync(PROCESSED_DIR, { recursive: true });
             const destPath = path.join(PROCESSED_DIR, path.basename(filePath));
             fs.renameSync(filePath, destPath);
             return invoice;
         } catch (error) {
+            if (!fs.existsSync(ERRORS_DIR)) fs.mkdirSync(ERRORS_DIR, { recursive: true });
             const errorPath = path.join(ERRORS_DIR, path.basename(filePath));
             if (fs.existsSync(filePath)) {
                 fs.renameSync(filePath, errorPath);
@@ -70,6 +82,7 @@ export class IngestionService {
         ${text}
 
         Responde ÚNICAMENTE con un objeto JSON con esta estructura:
+        {
           "numero": "string",
           "emisorNombre": "string",
           "clienteNombre": "string",
@@ -80,63 +93,65 @@ export class IngestionService {
           "items": [{"descripcion": "string", "cantidad": number, "precio": number}]
         }`;
 
-        if (process.env.NODE_ENV !== 'production') {
-            console.log('--- DEBUG IA PROMPT ---');
-            console.log(prompt);
-            console.log('-----------------------');
+        let aiOverride = undefined;
+        if (empresaId) {
+            const db = await Database.read();
+            const empresa = db.empresas.find(e => e.id === empresaId);
+            aiOverride = empresa?.configuracion?.aiConfig;
         }
 
-        const result = await IAService.chat(prompt, "Eres un extractor de datos de PDF. Devuelve EXCLUSIVAMENTE el JSON, sin comentarios ni explicaciones.");
-
-        if (process.env.NODE_ENV !== 'production') {
-            console.log('--- DEBUG IA RESPONSE ---');
-            console.log(result.response);
-            console.log('-------------------------');
-        }
+        const result = await IAService.chat(prompt, "Eres un extractor de datos de PDF. Devuelve EXCLUSIVAMENTE el JSON, sin comentarios ni explicaciones.", aiOverride);
 
         // Clean up response to find the JSON block
         let jsonString = result.response;
-        const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
-
-        if (!jsonMatch) {
-            console.error('❌ La IA no devolvió un JSON válido:', result.response);
-            throw new Error('No se pudo encontrar un JSON válido en la respuesta de la IA');
+        const markdownMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
+        if (markdownMatch) {
+            jsonString = markdownMatch[1];
+        } else {
+            const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                jsonString = jsonMatch[0];
+            }
         }
 
-        jsonString = jsonMatch[0]
-            .replace(/\/\/.*$/gm, '') // Remove comments
-            .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
+        jsonString = jsonString
+            .replace(/\/\/.*$/gm, '')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
             .trim();
 
-        console.log('DEBUG: Attempting to parse JSON string:', jsonString);
-        const invoiceData = JSON.parse(jsonString);
-
-        // Añadir el proveedor al objeto de datos antes de guardar
-        invoiceData.iaProvider = result.provider;
-        invoiceData.archivoOriginal = fileName;
-
-        return await this.saveToSystem(invoiceData, empresaId);
+        try {
+            const invoiceData = JSON.parse(jsonString);
+            invoiceData.iaProvider = result.provider;
+            invoiceData.archivoOriginal = fileName;
+            return await this.saveToSystem(invoiceData, empresaId);
+        } catch (parseError: any) {
+            console.error('❌ Error parseando JSON de la IA:', parseError.message);
+            console.error('Contenido que falló:', jsonString);
+            throw new Error(`Error de formato en respuesta IA: ${parseError.message}`);
+        }
     }
 
     private static async saveToSystem(data: any, forcedEmpresaId?: string) {
         const db = await Database.read();
-
         const empresaId = forcedEmpresaId || db.empresas[0]?.id;
 
-        // Buscar cliente por nombre normalizado dentro de esta empresa
-        let cliente = data.clienteId ? db.clientes.find(c => c.id === data.clienteId) : null;
-        if (!cliente) {
-            cliente = db.clientes.find(c =>
-                c.empresaId === empresaId &&
-                c.nombre.toLowerCase().includes(data.clienteNombre.toLowerCase())
-            );
-        }
+        // Validar datos mínimos
+        const clienteNombre = data.clienteNombre || 'Cliente Desconocido';
+        const emisorNombre = data.emisorNombre || 'Emisor Desconocido';
+
+        // Buscar cliente
+        let cliente = db.clientes.find(c =>
+            c.empresaId === empresaId &&
+            c.nombre &&
+            clienteNombre &&
+            c.nombre.toLowerCase().includes(clienteNombre.toLowerCase())
+        );
 
         if (!cliente && empresaId) {
             cliente = {
                 id: uuidv4(),
                 empresaId,
-                nombre: data.clienteNombre,
+                nombre: clienteNombre,
                 rfc: 'PENDIENTE',
                 email: '',
                 activo: true
@@ -144,22 +159,17 @@ export class IngestionService {
             await Database.saveToCollection('clientes', cliente);
         }
 
-        // Doble validación:
-        // 1. Por número exacto
-        // 2. Por combinación (Emisor + Fecha + Total) para evitar fallos de lectura de la IA
+        // Duplicados
         const normalize = (s: string) => s?.toLowerCase().trim().replace(/[*]/g, '');
-
         const facturaExistente = db.facturas.find(f => {
             const numMatch = f.numero && f.numero === data.numero;
             const comboMatch = normalize(f.emisorNombre) === normalize(data.emisorNombre) &&
                 new Date(f.fechaEmision).getTime() === new Date(data.fecha).getTime() &&
                 Math.abs(f.total - data.total) < 0.01;
-
             return f.empresaId === empresaId && (numMatch || comboMatch);
         });
 
         if (facturaExistente) {
-            console.log(`\x1b[33m⚠️ DUPLICADO DETECTADO:\x1b[0m Factura de ${data.emisorNombre} del ${data.fecha} por ${data.total}€ ya existe. Saltando.`);
             return { invoice: facturaExistente, isDuplicate: true };
         }
 
@@ -167,22 +177,21 @@ export class IngestionService {
             id: uuidv4(),
             empresaId,
             clienteId: cliente?.id,
-            emisorNombre: data.emisorNombre, // Nuevo campo: Quien emite la factura
-            clienteNombre: cliente?.nombre || data.clienteNombre,
-            numero: data.numero,
+            emisorNombre: emisorNombre,
+            clienteNombre: cliente?.nombre || clienteNombre,
+            numero: data.numero || `S/N-${Date.now()}`,
             fechaEmision: new Date(data.fecha),
             estado: 'pendiente',
             total: data.total,
-            moneda: data.moneda || 'MXN',
-            categoria: data.categoria || 'otros', // Nuevo campo: Categoría
-            iaProvider: data.iaProvider || 'unknown',
+            moneda: data.moneda || 'EUR',
+            categoria: data.categoria || 'otros',
+            iaProvider: data.iaProvider,
             archivoOriginal: data.archivoOriginal,
             items: data.items.map((i: any) => ({ ...i, id: uuidv4(), total: i.cantidad * i.precio })),
             pagos: []
         };
 
         await Database.saveToCollection('facturas', nuevaFactura);
-        console.log(`✅ Factura ${data.numero} guardada correctamente con IA: ${data.iaProvider}`);
         return { invoice: nuevaFactura, isDuplicate: false };
     }
 }

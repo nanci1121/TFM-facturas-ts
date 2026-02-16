@@ -59,5 +59,29 @@ export const EmpresasController = {
         } catch (error) {
             res.status(500).json({ message: 'Error en el servidor', error });
         }
+    },
+
+    async updateConfig(req: any, res: Response) {
+        try {
+            const empresaId = req.user.empresaId;
+            const newConfig = req.body;
+
+            if (!empresaId) return res.status(400).json({ message: 'Usuario sin empresa' });
+
+            const db = await Database.read();
+            const index = db.empresas.findIndex(e => e.id === empresaId);
+
+            if (index === -1) return res.status(404).json({ message: 'Empresa no encontrada' });
+
+            db.empresas[index].configuracion = {
+                ...db.empresas[index].configuracion,
+                ...newConfig
+            };
+
+            await Database.write(db);
+            res.json(db.empresas[index].configuracion);
+        } catch (error) {
+            res.status(500).json({ message: 'Error en el servidor', error });
+        }
     }
 };

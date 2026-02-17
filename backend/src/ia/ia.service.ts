@@ -48,34 +48,7 @@ export class IAService {
         let result: { response: string; provider: string } | null = null;
         const forcedProvider = override?.selectedProvider;
 
-        // 1. Try Groq
-        if (!result && (!forcedProvider || forcedProvider === 'groq' || forcedProvider === 'auto')) {
-            const groq = this.getGroqConfig(override);
-            if (groq.key) {
-                try {
-                    const response = await axios.post(groq.url, {
-                        model: groq.model,
-                        messages: [
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: prompt }
-                        ],
-                        temperature: 0.7
-                    }, {
-                        headers: {
-                            'Authorization': `Bearer ${groq.key}`,
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    result = { response: response.data.choices[0].message.content, provider: `groq (${groq.model})` };
-                } catch (error: any) {
-                    console.error('❌ Error en Groq:', error.response?.data || error.message);
-                    if (forcedProvider === 'groq') throw error;
-                }
-            }
-        }
-
-
-        // 2. Try Minimax
+        // 1. Try Minimax
         if (!result && (!forcedProvider || forcedProvider === 'minimax' || forcedProvider === 'auto')) {
             const minimax = this.getMinimaxConfig(override);
             if (minimax.key) {
@@ -115,9 +88,36 @@ export class IAService {
             }
         }
 
+        // 2. Try Groq
+        if (!result && (!forcedProvider || forcedProvider === 'groq' || forcedProvider === 'auto')) {
+            const groq = this.getGroqConfig(override);
+            if (groq.key) {
+                try {
+                    const response = await axios.post(groq.url, {
+                        model: groq.model,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: prompt }
+                        ],
+                        temperature: 0.7
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${groq.key}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 30000
+                    });
+                    result = { response: response.data.choices[0].message.content, provider: `groq (${groq.model})` };
+                } catch (error: any) {
+                    console.error('❌ Error en Groq:', error.response?.data || error.message);
+                    if (forcedProvider === 'groq') throw error;
+                }
+            }
+        }
+
         // 3. Try OpenRouter (DeepSeek)
         if (!result && (!forcedProvider || forcedProvider === 'openrouter' || forcedProvider === 'auto')) {
-            const orKey = override?.openrouterKey || process.env.OPENROUTER_API_KEY;
+            const orKey = override?.openrouterKey || process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_API_KEY;
             if (orKey) {
                 try {
                     const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
@@ -224,7 +224,7 @@ export class IAService {
         }
 
         // Check OpenRouter
-        const orKey = override?.openrouterKey || process.env.OPENROUTER_API_KEY;
+        const orKey = override?.openrouterKey || process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_API_KEY;
         if (orKey) {
             try {
                 await axios.post('https://openrouter.ai/api/v1/chat/completions', {

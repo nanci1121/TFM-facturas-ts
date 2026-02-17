@@ -1,24 +1,46 @@
 import { Database } from '../database';
-import fs from 'fs/promises';
-import path from 'path';
+import { prisma } from './db';
+import { v4 as uuidv4 } from 'uuid';
 
-describe('Database Module', () => {
-    const TEST_DB_PATH = path.join(process.cwd(), 'db.json');
+describe('Database Module Integration (Prisma)', () => {
 
-    it('should read the database structure correctly', async () => {
-        const db = await Database.read();
-        expect(db).toHaveProperty('usuarios');
-        expect(db).toHaveProperty('facturas');
-        expect(Array.isArray(db.usuarios)).toBe(true);
+    beforeAll(async () => {
+        // Ensure DB connection
+        await prisma.$connect();
     });
 
-    it('should save and retrieve an item from a collection', async () => {
-        const testItem = { id: 'test-123', name: 'Test User' };
-        await Database.saveToCollection('usuarios' as any, testItem);
+    afterAll(async () => {
+        await prisma.$disconnect();
+    });
 
-        const db = await Database.read();
-        const saved = db.usuarios.find(u => u.id === 'test-123');
+    it('should read the database collections correctly', async () => {
+        // We test getCollection instead of read() which is deprecated
+        const usuarios = await Database.getCollection('usuarios');
+        const facturas = await Database.getCollection('facturas');
+
+        expect(Array.isArray(usuarios)).toBe(true);
+        expect(Array.isArray(facturas)).toBe(true);
+    });
+
+    it('should save and retrieve a user using Prisma wrapper', async () => {
+        const testId = uuidv4();
+        const testUser = {
+            id: testId,
+            email: `test-${testId}@example.com`,
+            password: 'hash',
+            nombre: 'Test User',
+            rol: 'user'
+        };
+
+        await Database.saveToCollection('usuarios', testUser);
+
+        const usuarios = await Database.getCollection<any>('usuarios');
+        const saved = usuarios.find(u => u.id === testId);
+
         expect(saved).toBeDefined();
-        expect(saved.name).toBe('Test User');
+        expect(saved.email).toBe(testUser.email);
+
+        // Cleanup
+        await Database.deleteFromCollection('usuarios', testId);
     });
 });

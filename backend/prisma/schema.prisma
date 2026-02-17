@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  nombre    String
+  apellido  String?
+  rol       String   @default("user") // admin, user
+  empresaId String?
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relaciones
+  empresa   Empresa? @relation(fields: [empresaId], references: [id])
+}
+
+model Empresa {
+  id            String   @id @default(uuid())
+  nombre        String
+  rfc           String? 
+  direccion     String?
+  telefono      String?
+  email         String?
+  configuracion Json?    // Guardamos la config (moneda, impuestos, IA keys) como JSON
+  activa        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relaciones
+  usuarios      Usuario[]
+  clientes      Cliente[]
+  facturas      Factura[]
+}
+
+model Cliente {
+  id        String   @id @default(uuid())
+  empresaId String
+  nombre    String
+  rfc       String?
+  direccion String?
+  telefono  String?
+  email     String?
+  contacto  String?
+  notas     String?
+  tipo      String?   @default("cliente") // cliente, proveedor
+  activo    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relaciones
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  facturas  Factura[]
+}
+
+model Factura {
+  id              String   @id @default(uuid())
+  empresaId       String
+  clienteId       String?
+  numero          String?
+  serie           String?
+  folio           Int?
+  fechaEmision    DateTime
+  fechaVencimiento DateTime?
+  fechaPago       DateTime?
+  estado          String   @default("borrador") // borrador, pendiente, pagada, anulada
+  tipo            String   @default("ingreso")  // ingreso, gasto
+  metodoPago      String?
+  subtotal        Float    @default(0)
+  impuestos       Float    @default(0)
+  total           Float    @default(0)
+  moneda          String   @default("EUR")
+  notas           String?
+  categoria       String?
+  iaProvider      String?
+  archivoOriginal String?
+  items           Json     // Guardamos los items de la factura como JSON por flexibilidad
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relaciones
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  cliente   Cliente? @relation(fields: [clienteId], references: [id])
+  pagos     Pago[]
+}
+
+model Pago {
+  id        String   @id @default(uuid())
+  facturaId String
+  monto     Float
+  fecha     DateTime @default(now())
+  metodo    String?
+  notas     String?
+  
+  // Relaciones
+  factura   Factura @relation(fields: [facturaId], references: [id])
+}

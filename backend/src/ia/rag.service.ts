@@ -1,12 +1,17 @@
-import { Database } from '../database';
-import { Factura, Cliente } from '../types';
+import { prisma } from '../database/db';
+import { Cliente } from '../types';
 
 export class RAGService {
     static async getContextForCompany(empresaId: string): Promise<string> {
-        const db = await Database.read();
-
-        const facturas = db.facturas.filter(f => f.empresaId === empresaId);
-        const clientes = db.clientes.filter(c => c.empresaId === empresaId);
+        const [facturas, clientes] = await Promise.all([
+            prisma.factura.findMany({
+                where: { empresaId },
+                orderBy: { fechaEmision: 'desc' }
+            }),
+            prisma.cliente.findMany({
+                where: { empresaId, activo: true }
+            })
+        ]);
 
         // Summary of financial data
         const totalFacturado = facturas.reduce((sum, f) => sum + f.total, 0);
@@ -20,13 +25,12 @@ export class RAGService {
     - Total de clientes registrados: ${clientes.length}
     
     LISTADO COMPLETO DE CLIENTES/CONTACTOS REGISTRADOS:
-    ${clientes.map(c => `- ${c.nombre}`).join(', ')}
+    ${clientes.map((c: any) => `- ${c.nombre}`).join(', ')}
     
     LISTADO DETALLADO DE FACTURAS (Base para búsquedas):
-    ${facturas.map(f => {
+    ${facturas.map((f: any) => {
             const fecha = new Date(f.fechaEmision).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-            // Incluimos tanto el cliente asignado como el emisor real del PDF
-            return `- Factura ${f.numero}: Emisor (Establecimiento): ${f.emisorNombre || 'Desconocido'}, Cliente asignado: ${this.getClienteNombre(f.clienteId, clientes)}, Fecha: ${fecha}, Total: ${f.total} ${f.moneda}, Estado: ${f.estado}, Categoría: ${f.categoria || 'Sin categoría'}`;
+            return `- Factura ${f.numero}: Emisor (Establecimiento): ${f.emisorNombre || 'Desconocido'}, Cliente asignado: ${this.getClienteNombre(f.clienteId, clientes as any)}, Fecha: ${fecha}, Total: ${f.total} ${f.moneda}, Estado: ${f.estado}, Categoría: ${f.categoria || 'Sin categoría'}`;
         }).join('\n')}
     
     INSTRUCCIÓN CRÍTICA: El usuario puede preguntar por el "Emisor" o el "Establecimiento" (ej: Mercadona, O2, etc.). Utiliza el campo "Emisor (Establecimiento)" del listado para responder.

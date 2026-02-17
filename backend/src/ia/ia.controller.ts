@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { IAService } from './ia.service';
 import { RAGService } from './rag.service';
-import { Database } from '../database';
+import { prisma } from '../database/db';
 
 export const IAController = {
     async chat(req: any, res: Response) {
@@ -13,9 +13,10 @@ export const IAController = {
             let aiOverride = undefined;
 
             if (empresaId) {
-                const db = await Database.read();
-                const empresa = db.empresas.find(e => e.id === empresaId);
-                aiOverride = empresa?.configuracion?.aiConfig;
+                const empresa = await prisma.empresa.findUnique({
+                    where: { id: empresaId }
+                });
+                aiOverride = (empresa?.configuracion as any)?.aiConfig;
 
                 if (useRAG) {
                     context = await RAGService.getContextForCompany(empresaId);
@@ -25,6 +26,7 @@ export const IAController = {
             const result = await IAService.chat(message, context, aiOverride);
             res.json(result);
         } catch (error: any) {
+            console.error('Error in IAController.chat:', error);
             res.status(500).json({ message: error.message });
         }
     },
@@ -35,14 +37,16 @@ export const IAController = {
             let aiOverride = undefined;
 
             if (empresaId) {
-                const db = await Database.read();
-                const empresa = db.empresas.find(e => e.id === empresaId);
-                aiOverride = empresa?.configuracion?.aiConfig;
+                const empresa = await prisma.empresa.findUnique({
+                    where: { id: empresaId }
+                });
+                aiOverride = (empresa?.configuracion as any)?.aiConfig;
             }
 
             const providers = await IAService.checkStatus(aiOverride);
             res.json({ providers });
         } catch (error: any) {
+            console.error('Error in IAController.getStatus:', error);
             res.status(500).json({ message: error.message });
         }
     },

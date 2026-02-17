@@ -85,6 +85,8 @@ model Factura {
   categoria       String?
   iaProvider      String?
   archivoOriginal String?
+  emisorNombre    String?
+  clienteNombre   String?
   items           Json     // Guardamos los items de la factura como JSON por flexibilidad
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

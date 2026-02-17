@@ -207,8 +207,10 @@ export class IngestionService {
                 categoria: data.categoria || 'otros',
                 iaProvider: data.iaProvider,
                 archivoOriginal: data.archivoOriginal,
+                emisorNombre: data.emisorNombre,
+                clienteNombre: data.clienteNombre,
                 items: items as any,
-            }
+            } as any
         });
 
         return { invoice: nuevaFactura, isDuplicate: false };

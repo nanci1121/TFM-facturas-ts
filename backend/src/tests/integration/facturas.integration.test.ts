@@ -87,6 +87,9 @@ describe('Integration: Facturas and Database', () => {
             impuestos: 21,
             total: 121,
             moneda: 'EUR',
+            categoria: 'otros',
+            archivoOriginal: undefined,
+            iaProvider: undefined,
             notas: 'Invoice from integration test',
             items: [
                 {
@@ -99,8 +102,7 @@ describe('Integration: Facturas and Database', () => {
                     impuesto: 21,
                     unidad: 'SERVICE'
                 }
-            ],
-            pagos: []
+            ]
         };
 
         await Database.saveToCollection('facturas', newFactura);

@@ -1,90 +1,93 @@
 import { Response } from 'express';
-import { Database } from '../database';
-import { Factura } from '../types';
-import { startOfMonth, subMonths, isWithinInterval, endOfMonth, addDays, isBefore, isAfter } from 'date-fns';
+import { prisma } from '../database/db';
+import { startOfMonth, subMonths, endOfMonth, addDays, isAfter, isBefore } from 'date-fns';
 
 export const ReportesController = {
     async getResumen(req: any, res: Response) {
         try {
             const empresaId = req.user.empresaId;
-            const db = await Database.read();
-            const facturas = db.facturas.filter((f: Factura) => f.empresaId === empresaId);
-            const clientes = db.clientes.filter((c: any) => c.empresaId === empresaId);
-
-            // Separar por tipo
-            const gastos = facturas.filter((f: Factura) => (f.tipo || 'gasto') === 'gasto');
-            const ingresos = facturas.filter((f: Factura) => f.tipo === 'ingreso');
-
             const now = new Date();
             const currentMonthStart = startOfMonth(now);
             const previousMonthStart = startOfMonth(subMonths(now, 1));
             const previousMonthEnd = endOfMonth(subMonths(now, 1));
 
-            // --- GASTOS ---
-            const gastoTotal = gastos.reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const gastoPagado = gastos.filter((f: Factura) => f.estado === 'pagada').reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const gastoPendiente = gastos.filter((f: Factura) => f.estado === 'pendiente' || f.estado === 'parcial').reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const gastoVencido = gastos.filter((f: Factura) => f.estado === 'vencida').reduce((sum: number, f: Factura) => sum + f.total, 0);
+            // Run multiple aggregates in parallel
+            const [
+                facturas,
+                clientesCount,
+                gastoMesActual,
+                gastoMesAnterior,
+                ingresoMesActual,
+                ingresoMesAnterior
+            ] = await Promise.all([
+                // All invoices for this company
+                prisma.factura.findMany({ where: { empresaId } }),
+                // Total clients
+                prisma.cliente.count({ where: { empresaId, activo: true } }),
+                // Gasto Mes Actual
+                prisma.factura.aggregate({
+                    where: { empresaId, tipo: 'gasto', fechaEmision: { gte: currentMonthStart, lte: now } },
+                    _sum: { total: true }
+                }),
+                // Gasto Mes Anterior
+                prisma.factura.aggregate({
+                    where: { empresaId, tipo: 'gasto', fechaEmision: { gte: previousMonthStart, lte: previousMonthEnd } },
+                    _sum: { total: true }
+                }),
+                // Ingreso Mes Actual
+                prisma.factura.aggregate({
+                    where: { empresaId, tipo: 'ingreso', fechaEmision: { gte: currentMonthStart, lte: now } },
+                    _sum: { total: true }
+                }),
+                // Ingreso Mes Anterior
+                prisma.factura.aggregate({
+                    where: { empresaId, tipo: 'ingreso', fechaEmision: { gte: previousMonthStart, lte: previousMonthEnd } },
+                    _sum: { total: true }
+                })
+            ]);
 
-            // Gasto mes actual vs anterior
-            const gastoMesActual = gastos
-                .filter((f: Factura) => isWithinInterval(new Date(f.fechaEmision), { start: currentMonthStart, end: now }))
-                .reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const gastoMesAnterior = gastos
-                .filter((f: Factura) => isWithinInterval(new Date(f.fechaEmision), { start: previousMonthStart, end: previousMonthEnd }))
-                .reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const gastoVariacion = gastoMesAnterior > 0
-                ? Math.round(((gastoMesActual - gastoMesAnterior) / gastoMesAnterior) * 1000) / 10
-                : gastoMesActual > 0 ? 100 : 0;
+            const gastos = facturas.filter(f => f.tipo === 'gasto');
+            const ingresos = facturas.filter(f => f.tipo === 'ingreso');
 
-            // --- INGRESOS ---
-            const ingresoTotal = ingresos.reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const ingresoCobrado = ingresos.filter((f: Factura) => f.estado === 'pagada').reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const ingresoPendiente = ingresos.filter((f: Factura) => f.estado === 'pendiente' || f.estado === 'parcial').reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const ingresoVencido = ingresos.filter((f: Factura) => f.estado === 'vencida').reduce((sum: number, f: Factura) => sum + f.total, 0);
+            const calculateVariation = (actual: number, anterior: number) => {
+                if (anterior === 0) return actual > 0 ? 100 : 0;
+                return Math.round(((actual - anterior) / anterior) * 1000) / 10;
+            };
 
-            // Ingreso mes actual vs anterior
-            const ingresoMesActual = ingresos
-                .filter((f: Factura) => isWithinInterval(new Date(f.fechaEmision), { start: currentMonthStart, end: now }))
-                .reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const ingresoMesAnterior = ingresos
-                .filter((f: Factura) => isWithinInterval(new Date(f.fechaEmision), { start: previousMonthStart, end: previousMonthEnd }))
-                .reduce((sum: number, f: Factura) => sum + f.total, 0);
-            const ingresoVariacion = ingresoMesAnterior > 0
-                ? Math.round(((ingresoMesActual - ingresoMesAnterior) / ingresoMesAnterior) * 1000) / 10
-                : ingresoMesActual > 0 ? 100 : 0;
+            const gActual = gastoMesActual._sum.total || 0;
+            const gAnterior = gastoMesAnterior._sum.total || 0;
+            const iActual = ingresoMesActual._sum.total || 0;
+            const iAnterior = ingresoMesAnterior._sum.total || 0;
 
             const resumen = {
-                // Gastos (facturas que pagamos a proveedores)
                 gastos: {
-                    total: gastoTotal,
-                    pagado: gastoPagado,
-                    pendientePagar: gastoPendiente,
-                    vencido: gastoVencido,
+                    total: gastos.reduce((sum, f) => sum + f.total, 0),
+                    pagado: gastos.filter(f => f.estado === 'pagada').reduce((sum, f) => sum + f.total, 0),
+                    pendientePagar: gastos.filter(f => ['pendiente', 'parcial'].includes(f.estado)).reduce((sum, f) => sum + f.total, 0),
+                    vencido: gastos.filter(f => f.estado === 'vencida').reduce((sum, f) => sum + f.total, 0),
                     count: gastos.length,
-                    mesActual: gastoMesActual,
-                    mesAnterior: gastoMesAnterior,
-                    variacion: gastoVariacion,
+                    mesActual: gActual,
+                    mesAnterior: gAnterior,
+                    variacion: calculateVariation(gActual, gAnterior),
                 },
-                // Ingresos (facturas que cobramos a clientes)
                 ingresos: {
-                    total: ingresoTotal,
-                    cobrado: ingresoCobrado,
-                    pendienteCobrar: ingresoPendiente,
-                    vencido: ingresoVencido,
+                    total: ingresos.reduce((sum, f) => sum + f.total, 0),
+                    cobrado: ingresos.filter(f => f.estado === 'pagada').reduce((sum, f) => sum + f.total, 0),
+                    pendienteCobrar: ingresos.filter(f => ['pendiente', 'parcial'].includes(f.estado)).reduce((sum, f) => sum + f.total, 0),
+                    vencido: ingresos.filter(f => f.estado === 'vencida').reduce((sum, f) => sum + f.total, 0),
                     count: ingresos.length,
-                    mesActual: ingresoMesActual,
-                    mesAnterior: ingresoMesAnterior,
-                    variacion: ingresoVariacion,
+                    mesActual: iActual,
+                    mesAnterior: iAnterior,
+                    variacion: calculateVariation(iActual, iAnterior),
                 },
-                // Balance general
-                balance: ingresoTotal - gastoTotal,
-                countClientes: clientes.length,
+                balance: (ingresos.reduce((sum, f) => sum + f.total, 0)) - (gastos.reduce((sum, f) => sum + f.total, 0)),
+                countClientes: clientesCount,
                 countFacturas: facturas.length,
             };
 
             res.json(resumen);
         } catch (error) {
+            console.error('Error in ReportesController.getResumen:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     },
@@ -92,22 +95,19 @@ export const ReportesController = {
     async getEstadisticasMensuales(req: any, res: Response) {
         try {
             const empresaId = req.user.empresaId;
-            const facturas = await Database.getCollection<Factura>('facturas');
-            const empresaFacturas = facturas.filter(f => f.empresaId === empresaId);
-
-            const stats = [];
             const now = new Date();
+            const stats = [];
 
             for (let i = 5; i >= 0; i--) {
                 const monthDate = subMonths(now, i);
                 const start = startOfMonth(monthDate);
                 const end = endOfMonth(monthDate);
 
-                const monthFacturas = empresaFacturas.filter(f =>
-                    isWithinInterval(new Date(f.fechaEmision), { start, end })
-                );
+                const monthFacturas = await prisma.factura.findMany({
+                    where: { empresaId, fechaEmision: { gte: start, lte: end } }
+                });
 
-                const gastosMes = monthFacturas.filter(f => (f.tipo || 'gasto') === 'gasto');
+                const gastosMes = monthFacturas.filter(f => f.tipo === 'gasto');
                 const ingresosMes = monthFacturas.filter(f => f.tipo === 'ingreso');
 
                 stats.push({
@@ -123,6 +123,7 @@ export const ReportesController = {
 
             res.json(stats);
         } catch (error) {
+            console.error('Error in ReportesController.getEstadisticasMensuales:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     },
@@ -130,31 +131,27 @@ export const ReportesController = {
     async getDistribucionEstados(req: any, res: Response) {
         try {
             const empresaId = req.user.empresaId;
-            const { tipo } = req.query;
-            const facturas = await Database.getCollection<Factura>('facturas');
-            let empresaFacturas = facturas.filter(f => f.empresaId === empresaId);
+            const { tipo } = req.query; // 'gasto' o 'ingreso'
 
-            if (tipo) {
-                empresaFacturas = empresaFacturas.filter(f => (f.tipo || 'gasto') === tipo);
-            }
+            const where: any = { empresaId };
+            if (tipo) where.tipo = tipo;
 
-            const estados: Record<string, { count: number; total: number }> = {};
-            empresaFacturas.forEach(f => {
-                if (!estados[f.estado]) {
-                    estados[f.estado] = { count: 0, total: 0 };
-                }
-                estados[f.estado].count++;
-                estados[f.estado].total += f.total;
+            const groupStats = await prisma.factura.groupBy({
+                by: ['estado'],
+                where,
+                _count: { estado: true },
+                _sum: { total: true }
             });
 
-            const distribucion = Object.entries(estados).map(([estado, data]) => ({
-                estado,
-                count: data.count,
-                total: Math.round(data.total * 100) / 100,
+            const distribucion = groupStats.map(stat => ({
+                estado: stat.estado,
+                count: stat._count.estado,
+                total: Math.round((stat._sum.total || 0) * 100) / 100
             }));
 
             res.json(distribucion);
         } catch (error) {
+            console.error('Error in ReportesController.getDistribucionEstados:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     },
@@ -162,30 +159,28 @@ export const ReportesController = {
     async getFacturasRecientes(req: any, res: Response) {
         try {
             const empresaId = req.user.empresaId;
-            const db = await Database.read();
-            const facturas = db.facturas.filter((f: Factura) => f.empresaId === empresaId);
-            const clientes = db.clientes;
+            const recientes = await prisma.factura.findMany({
+                where: { empresaId },
+                include: { cliente: { select: { nombre: true } } },
+                orderBy: { fechaEmision: 'desc' },
+                take: 5
+            });
 
-            const recientes = facturas
-                .sort((a: Factura, b: Factura) => new Date(b.fechaEmision).getTime() - new Date(a.fechaEmision).getTime())
-                .slice(0, 5)
-                .map((f: Factura) => {
-                    const cliente = clientes.find((c: any) => c.id === f.clienteId);
-                    return {
-                        id: f.id,
-                        numero: f.numero,
-                        emisorNombre: (f as any).emisorNombre || '—',
-                        clienteNombre: cliente ? cliente.nombre : 'Sin asignar',
-                        total: f.total,
-                        estado: f.estado,
-                        tipo: (f as any).tipo || 'gasto',
-                        fechaEmision: f.fechaEmision,
-                        categoria: (f as any).categoria || 'otros',
-                    };
-                });
+            const result = recientes.map((f: any) => ({
+                id: f.id,
+                numero: f.numero,
+                emisorNombre: f.emisorNombre || '—',
+                clienteNombre: f.cliente?.nombre || f.clienteNombre || 'Sin asignar',
+                total: f.total,
+                estado: f.estado,
+                tipo: f.tipo,
+                fechaEmision: f.fechaEmision,
+                categoria: f.categoria || 'otros',
+            }));
 
-            res.json(recientes);
+            res.json(result);
         } catch (error) {
+            console.error('Error in ReportesController.getFacturasRecientes:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     },
@@ -193,56 +188,42 @@ export const ReportesController = {
     async getAlertas(req: any, res: Response) {
         try {
             const empresaId = req.user.empresaId;
-            const db = await Database.read();
-            const facturas = db.facturas.filter((f: Factura) => f.empresaId === empresaId);
-            const clientes = db.clientes;
             const now = new Date();
             const in7Days = addDays(now, 7);
 
-            // Facturas que vencen en los próximos 7 días
-            const porVencer = facturas
-                .filter((f: Factura) => {
-                    if (f.estado === 'pagada' || f.estado === 'cancelada') return false;
-                    const vencimiento = new Date(f.fechaVencimiento);
-                    return isAfter(vencimiento, now) && isBefore(vencimiento, in7Days);
+            const [porVencer, vencidas] = await Promise.all([
+                prisma.factura.findMany({
+                    where: {
+                        empresaId,
+                        estado: { notIn: ['pagada', 'cancelada'] },
+                        fechaVencimiento: { gt: now, lte: in7Days }
+                    },
+                    include: { cliente: { select: { nombre: true } } }
+                }),
+                prisma.factura.findMany({
+                    where: { empresaId, estado: 'vencida' },
+                    include: { cliente: { select: { nombre: true } } }
                 })
-                .map((f: Factura) => {
-                    const cliente = clientes.find((c: any) => c.id === f.clienteId);
-                    return {
-                        id: f.id,
-                        numero: f.numero,
-                        clienteNombre: cliente ? cliente.nombre : 'Sin asignar',
-                        emisorNombre: (f as any).emisorNombre || '—',
-                        total: f.total,
-                        fechaVencimiento: f.fechaVencimiento,
-                        tipo: (f as any).tipo || 'gasto',
-                        tipoAlerta: 'por_vencer' as const,
-                    };
-                });
+            ]);
 
-            // Facturas vencidas
-            const vencidas = facturas
-                .filter((f: Factura) => f.estado === 'vencida')
-                .map((f: Factura) => {
-                    const cliente = clientes.find((c: any) => c.id === f.clienteId);
-                    return {
-                        id: f.id,
-                        numero: f.numero,
-                        clienteNombre: cliente ? cliente.nombre : 'Sin asignar',
-                        emisorNombre: (f as any).emisorNombre || '—',
-                        total: f.total,
-                        fechaVencimiento: f.fechaVencimiento,
-                        tipo: (f as any).tipo || 'gasto',
-                        tipoAlerta: 'vencida' as const,
-                    };
-                });
+            const mapAlerta = (tipoAlerta: 'por_vencer' | 'vencida') => (f: any) => ({
+                id: f.id,
+                numero: f.numero,
+                clienteNombre: f.cliente?.nombre || f.clienteNombre || 'Sin asignar',
+                emisorNombre: f.emisorNombre || '—',
+                total: f.total,
+                fechaVencimiento: f.fechaVencimiento,
+                tipo: f.tipo,
+                tipoAlerta,
+            });
 
             res.json({
-                porVencer,
-                vencidas,
+                porVencer: porVencer.map(mapAlerta('por_vencer')),
+                vencidas: vencidas.map(mapAlerta('vencida')),
                 totalAlertas: porVencer.length + vencidas.length,
             });
         } catch (error) {
+            console.error('Error in ReportesController.getAlertas:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     },
@@ -251,44 +232,34 @@ export const ReportesController = {
         try {
             const empresaId = req.user.empresaId;
             const { tipo } = req.query; // 'gasto' o 'ingreso'
-            const db = await Database.read();
-            const facturas = db.facturas.filter((f: Factura) => f.empresaId === empresaId);
 
-            const targetFacturas = facturas.filter((f: Factura) =>
-                tipo ? (f.tipo || 'gasto') === tipo : true
-            );
+            const where: any = { empresaId };
+            if (tipo) where.tipo = tipo;
 
-            const categorias: Record<string, { count: number; total: number }> = {};
-
-            targetFacturas.forEach((f: Factura) => {
-                const cat = (f as any).categoria || 'Sin Categoría';
-                if (!categorias[cat]) {
-                    categorias[cat] = { count: 0, total: 0 };
-                }
-                categorias[cat].count++;
-                categorias[cat].total += f.total;
+            const catStats = await prisma.factura.groupBy({
+                by: ['categoria'],
+                where,
+                _count: { categoria: true },
+                _sum: { total: true }
             });
 
-            // Ordenar por total descendente
-            const resultado = Object.entries(categorias)
-                .map(([nombre, datos]) => ({
-                    nombre,
-                    count: datos.count,
-                    total: Math.round(datos.total * 100) / 100,
-                    porcentaje: 0 // Se calculará en el frontend o aquí si queremos
-                }))
+            const totalGeneral = catStats.reduce((sum, stat) => sum + (stat._sum.total || 0), 0);
+
+            const resultado = catStats
+                .map(stat => {
+                    const total = stat._sum.total || 0;
+                    return {
+                        nombre: stat.categoria || 'Sin Categoría',
+                        count: stat._count.categoria,
+                        total: Math.round(total * 100) / 100,
+                        porcentaje: totalGeneral > 0 ? Math.round((total / totalGeneral) * 100) : 0
+                    };
+                })
                 .sort((a, b) => b.total - a.total);
 
-            const totalGeneral = resultado.reduce((sum, item) => sum + item.total, 0);
-
-            // Calcular porcentajes
-            const finalResult = resultado.map(item => ({
-                ...item,
-                porcentaje: totalGeneral > 0 ? Math.round((item.total / totalGeneral) * 100) : 0
-            }));
-
-            res.json(finalResult);
+            res.json(resultado);
         } catch (error) {
+            console.error('Error in ReportesController.getCategorias:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     }

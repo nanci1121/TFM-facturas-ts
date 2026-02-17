@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
     LayoutDashboard,
     FileText,
-    Users,
+    Building2,
     MessageSquare,
     Settings,
     BarChart3
@@ -13,7 +13,7 @@ const Sidebar = () => {
     const menuItems = [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
         { icon: FileText, label: 'Facturas', path: '/facturas' },
-        { icon: Users, label: 'Clientes', path: '/clientes' },
+        { icon: Building2, label: 'Contactos', path: '/contactos' },
         { icon: MessageSquare, label: 'IA Assistant', path: '/ia' },
         { icon: BarChart3, label: 'Reportes', path: '/reportes' },
         { icon: Settings, label: 'Configuración', path: '/settings' },

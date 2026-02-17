@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Plus, Search, Filter, MoreVertical, FileText, Upload, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, FileText, Upload, Loader2, AlertCircle, Send, Receipt } from 'lucide-react';
 import api from '../services/api';
+import CrearFacturaModal from '../components/CrearFacturaModal';
 
 const Facturas = () => {
     const [facturas, setFacturas] = useState<any[]>([]);
@@ -11,7 +12,9 @@ const Facturas = () => {
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [debugData, setDebugData] = useState<any>(null);
-    const [activeMenu, setActiveMenu] = useState<string | null>(null); // Nuevo estado para menu
+    const [activeMenu, setActiveMenu] = useState<string | null>(null);
+    const [filterTipo, setFilterTipo] = useState<string>('');
+    const [crearFacturaOpen, setCrearFacturaOpen] = useState(false);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterEstado, setFilterEstado] = useState('');
@@ -70,6 +73,7 @@ const Facturas = () => {
             if (filterCliente) params.clienteNombre = filterCliente;
             if (filterFromDate) params.from = filterFromDate;
             if (filterToDate) params.to = filterToDate;
+            if (filterTipo) params.tipo = filterTipo;
             const res = await api.get('/facturas', { params });
 
             // Defensive check: handle both direct array or paginated object structure
@@ -104,7 +108,7 @@ const Facturas = () => {
 
     useEffect(() => {
         setPage(1); // Reset page on filter/search change
-    }, [searchTerm, filterEstado, filterCategoria, filterCliente, filterFromDate, filterToDate]);
+    }, [searchTerm, filterEstado, filterCategoria, filterCliente, filterFromDate, filterToDate, filterTipo]);
 
     const fetchIAStatus = async () => {
         try {
@@ -120,7 +124,7 @@ const Facturas = () => {
         fetchIAStatus();
         fetchClientes();
         // eslint-disable-next-line
-    }, [searchTerm, filterEstado, filterCategoria, filterCliente, filterFromDate, filterToDate, page]);
+    }, [searchTerm, filterEstado, filterCategoria, filterCliente, filterFromDate, filterToDate, filterTipo, page]);
 
     const clientesOptions = useMemo(() => {
         const unique = new Set<string>();
@@ -176,7 +180,7 @@ const Facturas = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Facturas</h2>
-                    <p className="text-gray-500 text-sm">Gestiona y consulta todas tus facturas emitidas.</p>
+                    <p className="text-gray-500 text-sm">Gestiona gastos (PDF) e ingresos (facturas a clientes).</p>
                 </div>
                 <div className="flex gap-2">
                     <button
@@ -195,19 +199,49 @@ const Facturas = () => {
                         accept=".pdf"
                         className="hidden"
                     />
+                    {/* Upload PDF = Gasto */}
                     <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploading}
-                        className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl transition-colors font-medium disabled:opacity-50"
+                        className="flex items-center justify-center bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl transition-colors font-medium disabled:opacity-50"
+                        title="Subir factura PDF de proveedor"
                     >
                         {uploading ? (
                             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                         ) : (
-                            <Plus className="w-5 h-5 mr-2" />
+                            <Upload className="w-5 h-5 mr-2" />
                         )}
-                        {uploading ? 'Procesando...' : 'Nueva Factura'}
+                        {uploading ? 'Procesando...' : 'Subir Gasto'}
+                    </button>
+                    {/* Crear Factura = Ingreso */}
+                    <button
+                        onClick={() => setCrearFacturaOpen(true)}
+                        className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl transition-colors font-medium shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30"
+                    >
+                        <Send className="w-5 h-5 mr-2" />
+                        Nueva Factura
                     </button>
                 </div>
+            </div>
+
+            {/* Tabs de tipo */}
+            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+                {[
+                    { value: '', label: 'Todas', count: total },
+                    { value: 'gasto', label: '📥 Gastos', icon: Receipt },
+                    { value: 'ingreso', label: '📤 Ingresos', icon: Send },
+                ].map(tab => (
+                    <button
+                        key={tab.value}
+                        onClick={() => setFilterTipo(tab.value)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterTipo === tab.value
+                                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
             {/* Aviso de IA no disponible */}
@@ -314,13 +348,13 @@ const Facturas = () => {
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 text-xs uppercase font-bold">
                             <tr>
+                                <th className="px-6 py-4 min-w-[80px]">Tipo</th>
                                 <th className="px-6 py-4 min-w-[150px]">Número</th>
-                                <th className="px-6 py-4 min-w-[180px]">Emisor</th>
+                                <th className="px-6 py-4 min-w-[180px]">Emisor / Cliente</th>
                                 <th className="px-6 py-4 min-w-[140px]">Categoría</th>
-                                <th className="px-6 py-4 min-w-[180px]">Cliente</th>
                                 <th className="px-6 py-4 min-w-[120px]">Fecha</th>
                                 <th className="px-6 py-4 min-w-[120px]">Total</th>
-                                <th className="px-6 py-4 text-center min-w-[180px]">IA Provider</th>
+                                <th className="px-6 py-4 text-center min-w-[120px]">Origen</th>
                                 <th className="px-6 py-4 min-w-[130px]">Estado</th>
                                 <th className={`px-6 py-4 text-right transition-all duration-300 ease-in-out ${activeMenu ? 'w-60' : 'w-24'}`}>
                                     Acciones
@@ -335,18 +369,32 @@ const Facturas = () => {
                             ) : (
                                 filteredFacturas.map((f) => (
                                     <tr key={f.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${(f.tipo || 'gasto') === 'ingreso'
+                                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                                    : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                                }`}>
+                                                {(f.tipo || 'gasto') === 'ingreso' ? 'Ingreso' : 'Gasto'}
+                                            </span>
+                                        </td>
                                         <td className="px-6 py-4 font-semibold text-blue-600 dark:text-blue-400">{f.numero}</td>
-                                        <td className="px-6 py-4 text-gray-800 dark:text-gray-200 font-medium">{f.emisorNombre || '—'}</td>
+                                        <td className="px-6 py-4 text-gray-800 dark:text-gray-200 font-medium">
+                                            {(f.tipo || 'gasto') === 'gasto' ? (f.emisorNombre || '—') : (f.clienteNombre || 'Sin cliente')}
+                                        </td>
                                         <td className="px-6 py-4">
                                             <span className="text-[10px] bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400 px-2 py-1 rounded-md border border-purple-100 dark:border-purple-800/30 font-medium">
                                                 {f.categoria || 'otros'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400 text-sm">{f.clienteNombre || 'Sin cliente'}</td>
                                         <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-sm">
                                             {new Date(f.fechaEmision).toLocaleDateString()}
                                         </td>
-                                        <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">${f.total.toLocaleString()}</td>
+                                        <td className={`px-6 py-4 font-bold ${(f.tipo || 'gasto') === 'gasto'
+                                                ? 'text-red-600 dark:text-red-400'
+                                                : 'text-emerald-600 dark:text-emerald-400'
+                                            }`}>
+                                            {(f.tipo || 'gasto') === 'gasto' ? '-' : '+'}{f.total?.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                        </td>
                                         <td className="px-6 py-4 text-center">
                                             <span className="text-[10px] font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500">
                                                 {f.iaProvider || 'manual'}
@@ -577,6 +625,17 @@ const Facturas = () => {
                     </div>
                 </div>
             )}
+
+            {/* Modal Crear Factura de Ingreso */}
+            <CrearFacturaModal
+                isOpen={crearFacturaOpen}
+                onClose={() => setCrearFacturaOpen(false)}
+                onCreated={() => {
+                    fetchFacturas();
+                    fetchClientes();
+                }}
+                clientes={clientes}
+            />
         </div>
     );
 };

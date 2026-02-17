@@ -43,10 +43,11 @@ describe('Security & Multi-tenant Integration Tests', () => {
                 .set('Authorization', `Bearer ${tokenA}`);
 
             expect(response.status).toBe(200);
-            expect(Array.isArray(response.body)).toBe(true);
+            const facturas = response.body.data || response.body; // Handle pagination or flat array
+            expect(Array.isArray(facturas)).toBe(true);
 
             // Check that all returned invoices belong to Empresa A
-            response.body.forEach((factura: any) => {
+            facturas.forEach((factura: any) => {
                 expect(factura.empresaId).toBe(empresaA);
             });
         });
@@ -58,8 +59,10 @@ describe('Security & Multi-tenant Integration Tests', () => {
                 .set('Authorization', `Bearer ${tokenA}`);
 
             expect(response.status).toBe(200);
+            const facturas = response.body.data || response.body;
+
             // Even if we pass empresaId in query, the controller should force the JWT one
-            response.body.forEach((factura: any) => {
+            facturas.forEach((factura: any) => {
                 expect(factura.empresaId).toBe(empresaA);
                 expect(factura.empresaId).not.toBe(empresaB);
             });

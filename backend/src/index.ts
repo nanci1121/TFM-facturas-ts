@@ -3,7 +3,7 @@ dotenv.config();
 
 console.log('Environment loaded check:');
 console.log('- GROQ_API_KEY present:', !!process.env.GROQ_API_KEY);
-console.log('- GEMINI_API_KEY present:', !!process.env.GEMINI_API_KEY);
+console.log('- MINIMAX_API_KEY present:', !!process.env.MINIMAX_API_KEY);
 console.log('- OLLAMA_URL:', process.env.OLLAMA_URL);
 
 import app from './app';

@@ -9,9 +9,9 @@ const Configuracion = () => {
         prefijoFactura: 'FAC',
         iaProvider: 'auto',
         aiConfig: {
-            geminiKey: '',
             groqKey: '',
             openrouterKey: '',
+            minimaxKey: '',
             selectedProvider: 'auto'
         }
     });
@@ -30,9 +30,9 @@ const Configuracion = () => {
                 setConfig({
                     ...empresa.configuracion,
                     aiConfig: empresa.configuracion.aiConfig || {
-                        geminiKey: '',
                         groqKey: '',
                         openrouterKey: '',
+                        minimaxKey: '',
                         selectedProvider: 'auto'
                     }
                 });
@@ -170,14 +170,17 @@ const Configuracion = () => {
                         <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
                             <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-3">Proveedor de IA Activo</label>
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                {['auto', 'gemini', 'groq', 'ollama', 'openrouter'].map((p) => (
+                                {['auto', 'groq', 'minimax', 'ollama', 'openrouter'].map((p) => (
                                     <button
                                         key={p}
                                         type="button"
-                                        onClick={() => setConfig({
-                                            ...config,
-                                            aiConfig: { ...config.aiConfig, selectedProvider: p }
-                                        })}
+                                        onClick={() => {
+                                            setConfig({
+                                                ...config,
+                                                iaProvider: p, // También actualizamos iaProvider raíz
+                                                aiConfig: { ...config.aiConfig, selectedProvider: p }
+                                            });
+                                        }}
                                         className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${config.aiConfig.selectedProvider === p
                                             ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/30'
                                             : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-blue-300'
@@ -195,17 +198,17 @@ const Configuracion = () => {
                                     <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                                         <Key className="w-4 h-4 text-emerald-600" />
                                     </div>
-                                    <h3 className="font-bold text-gray-800 dark:text-white">Google Gemini API</h3>
+                                    <h3 className="font-bold text-gray-800 dark:text-white">Minimax API (Recomendado)</h3>
                                 </div>
                                 <input
                                     type="password"
-                                    value={config.aiConfig.geminiKey || ''}
+                                    value={config.aiConfig.minimaxKey || ''}
                                     onChange={(e) => setConfig({
                                         ...config,
-                                        aiConfig: { ...config.aiConfig, geminiKey: e.target.value }
+                                        aiConfig: { ...config.aiConfig, minimaxKey: e.target.value }
                                     })}
                                     className="w-full bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 transition-all dark:text-white font-mono"
-                                    placeholder="AIzaSy..."
+                                    placeholder="sk-minimax..."
                                 />
                             </div>
 

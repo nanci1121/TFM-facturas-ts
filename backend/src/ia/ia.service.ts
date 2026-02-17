@@ -1,11 +1,11 @@
 import axios from 'axios';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+
 
 export interface AIConfigOverride {
-    geminiKey?: string;
     groqKey?: string;
     openaiKey?: string;
     openrouterKey?: string;
+    minimaxKey?: string;
     selectedProvider?: string;
 }
 
@@ -17,15 +17,21 @@ export class IAService {
         };
     }
 
-    private static getGeminiKey(override?: AIConfigOverride) {
-        return override?.geminiKey || process.env.GEMINI_API_KEY;
-    }
+
 
     private static getGroqConfig(override?: AIConfigOverride) {
         return {
             key: (override?.groqKey || process.env.GROQ_API_KEY)?.trim(),
             model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
             url: 'https://api.groq.com/openai/v1/chat/completions'
+        };
+    }
+
+    private static getMinimaxConfig(override?: AIConfigOverride) {
+        return {
+            key: (override?.minimaxKey || process.env.MINIMAX_API_KEY)?.trim(),
+            model: process.env.MINIMAX_MODEL || 'M2-her',
+            url: 'https://api.minimax.io/v1/text/chatcompletion_v2'
         };
     }
 
@@ -42,23 +48,7 @@ export class IAService {
         let result: { response: string; provider: string } | null = null;
         const forcedProvider = override?.selectedProvider;
 
-        // 1. Try Gemini
-        if (!result && (!forcedProvider || forcedProvider === 'gemini' || forcedProvider === 'auto')) {
-            const geminiKey = this.getGeminiKey(override)?.trim();
-            if (geminiKey) {
-                try {
-                    const genAI = new GoogleGenerativeAI(geminiKey);
-                    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
-                    const geminiResult = await model.generateContent(fullPrompt);
-                    result = { response: geminiResult.response.text(), provider: 'gemini' };
-                } catch (error) {
-                    console.error('❌ Error en Gemini:', error);
-                    if (forcedProvider === 'gemini') throw error;
-                }
-            }
-        }
-
-        // 2. Try Groq
+        // 1. Try Groq
         if (!result && (!forcedProvider || forcedProvider === 'groq' || forcedProvider === 'auto')) {
             const groq = this.getGroqConfig(override);
             if (groq.key) {
@@ -80,6 +70,47 @@ export class IAService {
                 } catch (error: any) {
                     console.error('❌ Error en Groq:', error.response?.data || error.message);
                     if (forcedProvider === 'groq') throw error;
+                }
+            }
+        }
+
+
+        // 2. Try Minimax
+        if (!result && (!forcedProvider || forcedProvider === 'minimax' || forcedProvider === 'auto')) {
+            const minimax = this.getMinimaxConfig(override);
+            if (minimax.key) {
+                try {
+                    const response = await axios.post(minimax.url, {
+                        model: minimax.model,
+                        messages: [
+                            { role: 'system', name: 'MM Intelligent Assistant', content: systemPrompt },
+                            { role: 'user', name: 'User', content: prompt }
+                        ],
+                        stream: false,
+                        max_tokens: 2000
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${minimax.key}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 30000
+                    });
+
+                    // Minimax v2 response structure: choices[0].message.content
+                    let content = '';
+                    if (response.data.choices && response.data.choices.length > 0) {
+                        content = response.data.choices[0].message.content;
+                    } else if (response.data.base_resp && response.data.base_resp.status_msg) {
+                        throw new Error(`Minimax Error: ${response.data.base_resp.status_msg}`);
+                    }
+
+                    if (content) {
+                        result = { response: content, provider: `minimax (${minimax.model})` };
+                    }
+                } catch (error: any) {
+                    const errorMsg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+                    console.error('❌ Error en Minimax:', errorMsg);
+                    if (forcedProvider === 'minimax') throw error;
                 }
             }
         }
@@ -132,7 +163,7 @@ export class IAService {
         }
 
         if (!result) {
-            throw new Error(`Error de IA: No se pudo obtener respuesta de ningún proveedor (Gemini, Groq, OpenRouter u Ollama). Por favor, verifica tus claves API en la configuración.`);
+            throw new Error(`Error de IA: No se pudo obtener respuesta de ningún proveedor (Groq, Minimax, OpenRouter u Ollama). Por favor, verifica tus claves API en la configuración.`);
         }
 
         this.lastInteraction = { prompt: fullPrompt, response: result.response, provider: result.provider };
@@ -147,18 +178,6 @@ export class IAService {
         const status = [];
         const ollama = this.getOllamaConfig();
         const groq = this.getGroqConfig(override);
-        const geminiKey = this.getGeminiKey(override);
-
-        // Check Gemini
-        try {
-            if (!geminiKey) throw new Error();
-            const genAI = new GoogleGenerativeAI(geminiKey);
-            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
-            await model.generateContent("ping");
-            status.push({ name: 'gemini', available: true });
-        } catch {
-            status.push({ name: 'gemini', available: false });
-        }
 
         // Check Groq
         try {
@@ -174,6 +193,26 @@ export class IAService {
             status.push({ name: 'groq', available: true });
         } catch {
             status.push({ name: 'groq', available: false });
+        }
+
+        // Check Minimax
+        try {
+            const minimax = this.getMinimaxConfig(override);
+            if (!minimax.key) throw new Error();
+            await axios.post(minimax.url, {
+                model: minimax.model,
+                messages: [
+                    { role: 'system', name: 'MM Intelligent Assistant', content: 'You are a test assistant.' },
+                    { role: 'user', name: 'User', content: 'ping' }
+                ],
+                max_tokens: 1
+            }, {
+                headers: { 'Authorization': `Bearer ${minimax.key}` },
+                timeout: 5000
+            });
+            status.push({ name: 'minimax', available: true });
+        } catch {
+            status.push({ name: 'minimax', available: false });
         }
 
         // Check Ollama

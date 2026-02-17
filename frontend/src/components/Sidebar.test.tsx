@@ -15,7 +15,7 @@ describe('Sidebar Component', () => {
         expect(screen.getByText('FacturaIA')).toBeInTheDocument();
         expect(screen.getByText('Dashboard')).toBeInTheDocument();
         expect(screen.getByText('Facturas')).toBeInTheDocument();
-        expect(screen.getByText('Clientes')).toBeInTheDocument();
+        expect(screen.getByText('Contactos')).toBeInTheDocument();
         expect(screen.getByText('IA Assistant')).toBeInTheDocument();
     });
 

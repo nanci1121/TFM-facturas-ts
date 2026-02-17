@@ -30,7 +30,7 @@ async function testIAConnection() {
         console.error(`Motivo: ${error.message}`);
 
         console.log('\n--- Sugerencias de solución ---');
-        console.log('1. Verifica que GEMINI_API_KEY o GROQ_API_KEY sean correctas en el archivo .env');
+        console.log('1. Verifica que GROQ_API_KEY o MINIMAX_API_KEY sean correctas en el archivo .env');
         console.log('2. Si usas Ollama, asegúrate de que esté corriendo con "ollama serve"');
         console.log('3. Asegúrate de tener conexión a internet');
     }

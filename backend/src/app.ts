@@ -30,6 +30,7 @@ app.get('/health', (req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/empresas', empresasRoutes);
 app.use('/api/v1/clientes', clientesRoutes);
+app.use('/api/v1/contactos', clientesRoutes); // alias for frontend
 app.use('/api/v1/facturas', facturasRoutes);
 app.use('/api/v1/ia', iaRoutes);
 app.use('/api/v1/reportes', reportesRoutes);

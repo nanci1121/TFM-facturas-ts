@@ -23,17 +23,19 @@ export interface Empresa {
         impuestoDefault: number;
         prefijoFactura: string;
         numeracionActual: number;
-        iaProvider: 'gemini' | 'groq' | 'ollama' | 'auto';
+        iaProvider: 'groq' | 'ollama' | 'minimax' | 'auto';
         aiConfig?: {
-            geminiKey?: string;
             groqKey?: string;
             openaiKey?: string;
             openrouterKey?: string;
-            selectedProvider?: 'gemini' | 'groq' | 'ollama' | 'openrouter' | 'auto';
+            minimaxKey?: string;
+            selectedProvider?: 'groq' | 'ollama' | 'openrouter' | 'minimax' | 'auto';
         };
     };
     activa: boolean;
 }
+
+export type TipoContacto = 'cliente' | 'proveedor';
 
 export interface Cliente {
     id: string;
@@ -45,10 +47,12 @@ export interface Cliente {
     email: string;
     contacto: string;
     notas: string;
+    tipo: TipoContacto;
     activo: boolean;
 }
 
 export type EstadoFactura = 'borrador' | 'pendiente' | 'pagada' | 'vencida' | 'cancelada' | 'parcial';
+export type TipoFactura = 'gasto' | 'ingreso';
 
 export interface Factura {
     id: string;
@@ -61,6 +65,7 @@ export interface Factura {
     fechaVencimiento: Date;
     fechaPago: Date | null;
     estado: EstadoFactura;
+    tipo: TipoFactura;
     metodoPago: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque';
     subtotal: number;
     impuestos: number;
@@ -70,6 +75,10 @@ export interface Factura {
     items: ItemFactura[];
     pagos: Pago[];
     archivoOriginal?: string;
+    emisorNombre?: string;
+    clienteNombre?: string;
+    categoria?: string;
+    iaProvider?: string;
 }
 
 export interface ItemFactura {

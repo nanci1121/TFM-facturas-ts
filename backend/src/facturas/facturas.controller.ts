@@ -9,7 +9,7 @@ import path from 'path';
 export const FacturasController = {
     async list(req: any, res: Response) {
         try {
-            const { q, estado, categoria, clienteNombre, from, to, page = 1 } = req.query;
+            const { q, estado, categoria, clienteNombre, from, to, page = 1, tipo } = req.query;
             const empresaId = req.user.empresaId;
 
             if (!empresaId && req.user.rol !== 'super_admin') {
@@ -25,12 +25,17 @@ export const FacturasController = {
                 facturas = facturas.filter(f => f.empresaId === empresaId);
             }
 
+            // Filtrar por tipo (gasto/ingreso)
+            if (tipo) {
+                facturas = facturas.filter(f => f.tipo === tipo);
+            }
+
             // JOIN con nombres de clientes para facilitar la búsqueda
             let facturasCompletas = facturas.map(f => {
                 const cliente = clientes.find(c => c.id === f.clienteId);
                 return {
                     ...f,
-                    clienteNombre: cliente ? cliente.nombre : 'Cliente Desconocido'
+                    clienteNombre: (f as any).clienteNombre || (cliente ? cliente.nombre : 'Cliente Desconocido')
                 };
             });
 
@@ -52,7 +57,7 @@ export const FacturasController = {
 
             // 3. Categoría
             if (categoria) {
-                facturasCompletas = facturasCompletas.filter(f => f.categoria === categoria);
+                facturasCompletas = facturasCompletas.filter(f => (f as any).categoria === categoria);
             }
 
             // 4. Nombre de cliente específico
@@ -93,7 +98,7 @@ export const FacturasController = {
 
     async create(req: any, res: Response) {
         try {
-            const { clienteId, items, metodosPago, serie, notas, moneda, fechaEmision, fechaVencimiento } = req.body;
+            const { clienteId, items, metodosPago, serie, notas, moneda, fechaEmision, fechaVencimiento, tipo } = req.body;
             const empresaId = req.user.empresaId;
 
             if (!empresaId) return res.status(400).json({ message: 'Usuario sin empresa' });
@@ -119,6 +124,7 @@ export const FacturasController = {
                 fechaVencimiento: new Date(fechaVencimiento || Date.now()),
                 fechaPago: null,
                 estado: 'pendiente',
+                tipo: tipo || 'ingreso',
                 metodoPago: metodosPago || 'transferencia',
                 subtotal: totals.subtotal,
                 impuestos: totals.impuestos,

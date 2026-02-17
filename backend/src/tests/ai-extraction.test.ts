@@ -10,11 +10,21 @@ jest.mock('../ia/ia.service', () => ({
     }
 }));
 
-jest.mock('../database', () => ({
-    Database: {
-        read: jest.fn(),
-        saveToCollection: jest.fn(),
-        write: jest.fn()
+// Mock Prisma instead of Database
+jest.mock('../database/db', () => ({
+    prisma: {
+        empresa: {
+            findFirst: jest.fn(),
+            findUnique: jest.fn()
+        },
+        cliente: {
+            findFirst: jest.fn(),
+            create: jest.fn()
+        },
+        factura: {
+            findFirst: jest.fn(),
+            create: jest.fn()
+        }
     }
 }));
 
@@ -29,7 +39,7 @@ jest.mock('pdf-parse', () => {
 
 import { IngestionService } from '../ia/ingestion.service';
 import { IAService } from '../ia/ia.service';
-import { Database } from '../database';
+import { prisma } from '../database/db';
 
 describe('AI Extraction & Ingestion Tests', () => {
     beforeEach(() => {
@@ -52,19 +62,44 @@ describe('AI Extraction & Ingestion Tests', () => {
             provider: 'test-provider'
         });
 
-        (Database.read as jest.Mock).mockResolvedValue({
-            clientes: [],
-            empresas: [{ id: 'empresa-1' }],
-            facturas: []
-        });
+        // Mock Prisma calls
+        (prisma.empresa.findFirst as jest.Mock).mockResolvedValue({
+            id: 'empresa-1',
+            nombre: 'Test Company',
+            configuracion: {}
+        } as any);
+
+        (prisma.cliente.findFirst as jest.Mock).mockResolvedValue(null);
+        (prisma.cliente.create as jest.Mock).mockResolvedValue({
+            id: 'cliente-1',
+            empresaId: 'empresa-1',
+            nombre: 'Cliente de Prueba',
+            rfc: 'PENDIENTE',
+            email: '',
+            activo: true
+        } as any);
+
+        (prisma.factura.findFirst as jest.Mock).mockResolvedValue(null);
+        (prisma.factura.create as jest.Mock).mockResolvedValue({
+            id: 'factura-1',
+            empresaId: 'empresa-1',
+            clienteId: 'cliente-1',
+            numero: mockInvoiceData.numero,
+            fechaEmision: new Date(mockInvoiceData.fecha),
+            total: mockInvoiceData.total,
+            moneda: mockInvoiceData.moneda,
+            items: mockInvoiceData.items,
+            estado: 'pendiente',
+            tipo: 'gasto'
+        } as any);
 
         const buffer = Buffer.from('fake pdf content');
         const result = await IngestionService.processInvoiceFromBuffer(buffer, 'test.pdf');
 
         expect(result.invoice.numero).toBe("INV-001");
         expect(result.invoice.total).toBe(1160);
-        expect(Database.saveToCollection).toHaveBeenCalledWith('clientes', expect.any(Object));
-        expect(Database.saveToCollection).toHaveBeenCalledWith('facturas', expect.any(Object));
+        expect(prisma.cliente.create).toHaveBeenCalled();
+        expect(prisma.factura.create).toHaveBeenCalled();
     });
 
     it('should handle malformed JSON from AI with cleaned markers', async () => {
@@ -82,18 +117,33 @@ describe('AI Extraction & Ingestion Tests', () => {
             provider: 'test-provider'
         });
 
-        (Database.read as jest.Mock).mockResolvedValue({
-            clientes: [{ id: 'c1', nombre: 'Cliente Marker', empresaId: 'empresa-1' }],
-            empresas: [{ id: 'empresa-1' }],
-            facturas: []
-        });
+        (prisma.empresa.findFirst as jest.Mock).mockResolvedValue({
+            id: 'empresa-1',
+            nombre: 'Test Company',
+            configuracion: {}
+        } as any);
+
+        (prisma.cliente.findFirst as jest.Mock).mockResolvedValue({
+            id: 'c1',
+            nombre: 'Cliente Marker',
+            empresaId: 'empresa-1'
+        } as any);
+
+        (prisma.factura.findFirst as jest.Mock).mockResolvedValue(null);
+        (prisma.factura.create as jest.Mock).mockResolvedValue({
+            id: 'factura-1',
+            empresaId: 'empresa-1',
+            clienteId: 'c1',
+            numero: "INV-MARKER",
+            fechaEmision: new Date(),
+            total: 500
+        } as any);
 
         const buffer = Buffer.from('fake pdf content');
         const result = await IngestionService.processInvoiceFromBuffer(buffer, 'test-markers.pdf');
 
         expect(result.invoice.numero).toBe("INV-MARKER");
-        // Should NOT call saveToCollection for clients because it already exists
-        expect(Database.saveToCollection).not.toHaveBeenCalledWith('clientes', expect.any(Object));
-        expect(Database.saveToCollection).toHaveBeenCalledWith('facturas', expect.any(Object));
+        expect(prisma.cliente.create).not.toHaveBeenCalled();
+        expect(prisma.factura.create).toHaveBeenCalled();
     });
 });

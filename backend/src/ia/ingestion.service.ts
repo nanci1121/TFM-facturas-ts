@@ -3,7 +3,7 @@ import path from 'path';
 import chokidar from 'chokidar';
 import { PDFParse } from 'pdf-parse';
 import { IAService } from '../ia/ia.service';
-import { Database } from '../database';
+import { prisma } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads/facturas');
@@ -36,7 +36,6 @@ export class IngestionService {
         try {
             console.log(`📄 Analizando PDF: ${originalName} (${buffer.length} bytes)`);
 
-            // Usando la clase PDFParse que parece ser la correcta para esta versión instalada
             const parser = new (PDFParse as any)({ data: buffer });
             const pdfData = await parser.getText();
             const text = pdfData.text;
@@ -95,14 +94,14 @@ export class IngestionService {
 
         let aiOverride = undefined;
         if (empresaId) {
-            const db = await Database.read();
-            const empresa = db.empresas.find(e => e.id === empresaId);
-            aiOverride = empresa?.configuracion?.aiConfig;
+            const empresa = await prisma.empresa.findUnique({
+                where: { id: empresaId }
+            });
+            aiOverride = (empresa?.configuracion as any)?.aiConfig;
         }
 
         const result = await IAService.chat(prompt, "Eres un extractor de datos de PDF. Devuelve EXCLUSIVAMENTE el JSON, sin comentarios ni explicaciones.", aiOverride);
 
-        // Clean up response to find the JSON block
         let jsonString = result.response;
         const markdownMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
         if (markdownMatch) {
@@ -132,68 +131,88 @@ export class IngestionService {
     }
 
     private static async saveToSystem(data: any, forcedEmpresaId?: string) {
-        const db = await Database.read();
-        const empresaId = forcedEmpresaId || db.empresas[0]?.id;
+        let empresaId = forcedEmpresaId;
 
-        // Validar datos mínimos
+        if (!empresaId) {
+            const firstEmpresa = await prisma.empresa.findFirst();
+            empresaId = firstEmpresa?.id;
+        }
+
+        if (!empresaId) throw new Error('No hay empresas registradas en el sistema para asociar la factura.');
+
         const clienteNombre = data.clienteNombre || 'Cliente Desconocido';
         const emisorNombre = data.emisorNombre || 'Emisor Desconocido';
 
-        // Buscar cliente
-        let cliente = db.clientes.find(c =>
-            c.empresaId === empresaId &&
-            c.nombre &&
-            clienteNombre &&
-            c.nombre.toLowerCase().includes(clienteNombre.toLowerCase())
-        );
-
-        if (!cliente && empresaId) {
-            cliente = {
-                id: uuidv4(),
+        // Buscar cliente por nombre (aproximado)
+        let cliente = await prisma.cliente.findFirst({
+            where: {
                 empresaId,
-                nombre: clienteNombre,
-                rfc: 'PENDIENTE',
-                email: '',
+                nombre: { contains: clienteNombre, mode: 'insensitive' },
                 activo: true
-            } as any;
-            await Database.saveToCollection('clientes', cliente);
+            }
+        });
+
+        if (!cliente) {
+            cliente = await prisma.cliente.create({
+                data: {
+                    id: uuidv4(),
+                    empresaId,
+                    nombre: clienteNombre,
+                    rfc: 'PENDIENTE',
+                    email: '',
+                    activo: true
+                }
+            });
         }
 
-        // Duplicados
-        const normalize = (s: string) => s?.toLowerCase().trim().replace(/[*]/g, '');
-        const facturaExistente = db.facturas.find(f => {
-            const numMatch = f.numero && f.numero === data.numero;
-            const comboMatch = normalize(f.emisorNombre) === normalize(data.emisorNombre) &&
-                new Date(f.fechaEmision).getTime() === new Date(data.fecha).getTime() &&
-                Math.abs(f.total - data.total) < 0.01;
-            return f.empresaId === empresaId && (numMatch || comboMatch);
+        // Buscar duplicados
+        const fechaEmision = new Date(data.fecha);
+        const facturaExistente = await prisma.factura.findFirst({
+            where: {
+                empresaId,
+                OR: [
+                    { numero: data.numero },
+                    {
+                        AND: [
+                            { total: { equals: data.total } },
+                            { fechaEmision: { equals: fechaEmision } }
+                        ]
+                    }
+                ]
+            }
         });
 
         if (facturaExistente) {
             return { invoice: facturaExistente, isDuplicate: true };
         }
 
-        const nuevaFactura = {
+        const items = data.items.map((i: any) => ({
+            ...i,
             id: uuidv4(),
-            empresaId,
-            clienteId: cliente?.id,
-            emisorNombre: emisorNombre,
-            clienteNombre: cliente?.nombre || clienteNombre,
-            numero: data.numero || `S/N-${Date.now()}`,
-            fechaEmision: new Date(data.fecha),
-            fechaVencimiento: data.fechaVencimiento ? new Date(data.fechaVencimiento) : new Date(data.fecha),
-            estado: 'pendiente',
-            tipo: 'gasto' as const,
-            total: data.total,
-            moneda: data.moneda || 'EUR',
-            categoria: data.categoria || 'otros',
-            iaProvider: data.iaProvider,
-            archivoOriginal: data.archivoOriginal,
-            items: data.items.map((i: any) => ({ ...i, id: uuidv4(), total: i.cantidad * i.precio })),
-            pagos: []
-        };
+            total: (i.cantidad || 0) * (i.precio || 0)
+        }));
 
-        await Database.saveToCollection('facturas', nuevaFactura);
+        const nuevaFactura = await prisma.factura.create({
+            data: {
+                id: uuidv4(),
+                empresaId,
+                clienteId: cliente.id,
+                numero: data.numero || `S/N-${Date.now()}`,
+                fechaEmision: fechaEmision,
+                fechaVencimiento: data.fechaVencimiento ? new Date(data.fechaVencimiento) : fechaEmision,
+                estado: 'pendiente',
+                tipo: 'gasto',
+                total: data.total,
+                moneda: data.moneda || 'EUR',
+                categoria: data.categoria || 'otros',
+                iaProvider: data.iaProvider,
+                archivoOriginal: data.archivoOriginal,
+                emisorNombre: data.emisorNombre,
+                clienteNombre: data.clienteNombre,
+                items: items as any,
+            } as any
+        });
+
         return { invoice: nuevaFactura, isDuplicate: false };
     }
 }

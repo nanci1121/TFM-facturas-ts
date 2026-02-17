@@ -7,3 +7,4 @@ backend/uploads/facturas/procesadas/
 backend/uploads/facturas/errores/
 *.log
 .DS_Store
+backend/db.json

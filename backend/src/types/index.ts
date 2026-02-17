@@ -73,7 +73,7 @@ export interface Factura {
     moneda: string;
     notas: string;
     items: ItemFactura[];
-    pagos: Pago[];
+    pagos?: Pago[];
     archivoOriginal?: string;
     emisorNombre?: string;
     clienteNombre?: string;

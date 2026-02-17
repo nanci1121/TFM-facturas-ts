@@ -1,18 +1,16 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { Database } from '../database';
+import { prisma } from '../database/db';
 import { Empresa } from '../types';
 
 export const EmpresasController = {
     async list(req: any, res: Response) {
         try {
-            const empresas = await Database.getCollection<Empresa>('empresas');
-            // Si no es super_admin, solo ve su propia empresa
-            if (req.user.rol !== 'super_admin') {
-                return res.json(empresas.filter(e => e.id === req.user.empresaId));
-            }
+            const where = req.user.rol !== 'super_admin' ? { id: req.user.empresaId } : {};
+            const empresas = await prisma.empresa.findMany({ where });
             res.json(empresas);
         } catch (error) {
+            console.error('Error in empresas.list:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     },
@@ -21,26 +19,28 @@ export const EmpresasController = {
         try {
             const { nombre, rfc, direccion, telefono, email, configuracion } = req.body;
 
-            const newEmpresa: Empresa = {
-                id: uuidv4(),
-                nombre,
-                rfc,
-                direccion,
-                telefono,
-                email,
-                configuracion: {
-                    monedaDefault: configuracion?.monedaDefault || 'MXN',
-                    impuestoDefault: configuracion?.impuestoDefault || 16,
-                    prefijoFactura: configuracion?.prefijoFactura || 'F',
-                    numeracionActual: 0,
-                    iaProvider: 'auto',
-                },
-                activa: true,
-            };
+            const newEmpresa = await prisma.empresa.create({
+                data: {
+                    id: uuidv4(),
+                    nombre,
+                    rfc,
+                    direccion,
+                    telefono,
+                    email,
+                    configuracion: {
+                        monedaDefault: configuracion?.monedaDefault || 'EUR',
+                        impuestoDefault: configuracion?.impuestoDefault || 21,
+                        prefijoFactura: configuracion?.prefijoFactura || 'F',
+                        numeracionActual: 0,
+                        iaProvider: 'auto',
+                    },
+                    activa: true,
+                }
+            });
 
-            await Database.saveToCollection('empresas', newEmpresa);
             res.status(201).json(newEmpresa);
         } catch (error) {
+            console.error('Error in empresas.create:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     },
@@ -48,8 +48,9 @@ export const EmpresasController = {
     async getById(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            const empresas = await Database.getCollection<Empresa>('empresas');
-            const empresa = empresas.find(e => e.id === id);
+            const empresa = await prisma.empresa.findUnique({
+                where: { id }
+            });
 
             if (!empresa) {
                 return res.status(404).json({ message: 'Empresa no encontrada' });
@@ -68,19 +69,25 @@ export const EmpresasController = {
 
             if (!empresaId) return res.status(400).json({ message: 'Usuario sin empresa' });
 
-            const db = await Database.read();
-            const index = db.empresas.findIndex(e => e.id === empresaId);
+            const empresa = await prisma.empresa.findUnique({
+                where: { id: empresaId }
+            });
 
-            if (index === -1) return res.status(404).json({ message: 'Empresa no encontrada' });
+            if (!empresa) return res.status(404).json({ message: 'Empresa no encontrada' });
 
-            db.empresas[index].configuracion = {
-                ...db.empresas[index].configuracion,
-                ...newConfig
-            };
+            const updatedEmpresa = await prisma.empresa.update({
+                where: { id: empresaId },
+                data: {
+                    configuracion: {
+                        ...(empresa.configuracion as any),
+                        ...newConfig
+                    }
+                }
+            });
 
-            await Database.write(db);
-            res.json(db.empresas[index].configuracion);
+            res.json(updatedEmpresa.configuracion);
         } catch (error) {
+            console.error('Error in updateConfig:', error);
             res.status(500).json({ message: 'Error en el servidor', error });
         }
     }

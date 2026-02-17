@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { Database } from '../database';
-import { Factura, ItemFactura, Empresa } from '../types';
+import { prisma } from '../database/db';
+import { Factura, ItemFactura, Empresa, Cliente } from '../types';
 import { FinanceUtils } from '../utils/finance';
 import fs from 'fs';
 import path from 'path';
@@ -16,83 +16,82 @@ export const FacturasController = {
                 return res.status(400).json({ message: 'Se requiere estar asociado a una empresa' });
             }
 
-            const db = await Database.read();
-            let facturas = db.facturas;
-            const clientes = db.clientes;
-
-            // Filtrar por empresa
-            if (req.user.rol !== 'super_admin') {
-                facturas = facturas.filter(f => f.empresaId === empresaId);
-            }
-
-            // Filtrar por tipo (gasto/ingreso)
-            if (tipo) {
-                facturas = facturas.filter(f => f.tipo === tipo);
-            }
-
-            // JOIN con nombres de clientes para facilitar la búsqueda
-            let facturasCompletas = facturas.map(f => {
-                const cliente = clientes.find(c => c.id === f.clienteId);
-                return {
-                    ...f,
-                    clienteNombre: (f as any).clienteNombre || (cliente ? cliente.nombre : 'Cliente Desconocido')
-                };
-            });
-
-            // --- APLICAR FILTROS ---
-
-            // 1. Búsqueda general (q) por número o nombre de cliente
-            if (q) {
-                const search = (q as string).toLowerCase();
-                facturasCompletas = facturasCompletas.filter(f =>
-                    f.numero.toLowerCase().includes(search) ||
-                    f.clienteNombre.toLowerCase().includes(search)
-                );
-            }
-
-            // 2. Estado
-            if (estado) {
-                facturasCompletas = facturasCompletas.filter(f => f.estado === estado);
-            }
-
-            // 3. Categoría
-            if (categoria) {
-                facturasCompletas = facturasCompletas.filter(f => (f as any).categoria === categoria);
-            }
-
-            // 4. Nombre de cliente específico
-            if (clienteNombre) {
-                facturasCompletas = facturasCompletas.filter(f => f.clienteNombre === clienteNombre);
-            }
-
-            // 5. Rango de fechas
-            if (from) {
-                const fromDate = new Date(from as string);
-                facturasCompletas = facturasCompletas.filter(f => new Date(f.fechaEmision) >= fromDate);
-            }
-            if (to) {
-                const toDate = new Date(to as string);
-                facturasCompletas = facturasCompletas.filter(f => new Date(f.fechaEmision) <= toDate);
-            }
-
-            // --- PAGINACIÓN ---
             const limit = 50;
-            const total = facturasCompletas.length;
-            const totalPages = Math.ceil(total / limit);
             const offset = (Number(page) - 1) * limit;
 
-            const paginated = facturasCompletas.slice(offset, offset + limit);
+            // Construir el objeto WHERE para Prisma
+            const where: any = {};
+
+            if (req.user.rol !== 'super_admin') {
+                where.empresaId = empresaId;
+            }
+
+            if (tipo) {
+                where.tipo = tipo as string;
+            }
+
+            if (estado) {
+                where.estado = estado as string;
+            }
+
+            if (categoria) {
+                where.categoria = categoria as string;
+            }
+
+            if (from || to) {
+                where.fechaEmision = {};
+                if (from) where.fechaEmision.gte = new Date(from as string);
+                if (to) where.fechaEmision.lte = new Date(to as string);
+            }
+
+            // Búsqueda por número o cliente (usando include)
+            if (q || clienteNombre) {
+                where.OR = [];
+                if (q) {
+                    where.OR.push({ numero: { contains: q as string, mode: 'insensitive' } });
+                }
+
+                if (clienteNombre) {
+                    where.cliente = { nombre: { contains: clienteNombre as string, mode: 'insensitive' } };
+                } else if (q) {
+                    where.OR.push({ cliente: { nombre: { contains: q as string, mode: 'insensitive' } } });
+                }
+            }
+
+            // Ejecutar consulta con filtros, orden y paginación
+            const [total, facturas] = await Promise.all([
+                prisma.factura.count({ where }),
+                prisma.factura.findMany({
+                    where,
+                    skip: offset,
+                    take: limit,
+                    include: {
+                        cliente: {
+                            select: { nombre: true }
+                        }
+                    },
+                    orderBy: {
+                        fechaEmision: 'desc'
+                    }
+                })
+            ]);
+
+            // Mapear para mantener compatibilidad con el frontend (clienteNombre)
+            const data = facturas.map(f => ({
+                ...f,
+                clienteNombre: f.cliente?.nombre || 'Cliente Desconocido'
+            }));
 
             res.json({
-                data: paginated,
+                data,
                 total,
-                totalPages,
+                totalPages: Math.ceil(total / limit),
                 page: Number(page),
                 pageSize: limit
             });
         } catch (error) {
             console.error('Error in facturas.list:', error);
-            res.status(500).json({ message: 'Error en el servidor', error });
+            res.status(500).json({ message: 'Error en el servidor', error: (error as any).message });
         }
     },
 
@@ -103,54 +102,80 @@ export const FacturasController = {
 
             if (!empresaId) return res.status(400).json({ message: 'Usuario sin empresa' });
 
-            // Get enterprise to handle folio
-            const db = await Database.read();
-            const empresa = db.empresas.find(e => e.id === empresaId);
-            if (!empresa) return res.status(404).json({ message: 'Empresa no encontrada' });
+            // Transacción para asegurar que el folio se incremente correctamente
+            const result = await prisma.$transaction(async (tx) => {
+                const empresa = await tx.empresa.findUnique({
+                    where: { id: empresaId }
+                });
 
-            const nextFolio = (empresa.configuracion.numeracionActual || 0) + 1;
+                if (!empresa) throw new Error('Empresa no encontrada');
 
-            // Calculate totals using central finance utility
-            const totals = FinanceUtils.calculateInvoiceTotals(items);
+                const configuracion = (empresa.configuracion as any) || {
+                    numeracionActual: 0,
+                    monedaDefault: 'EUR',
+                    impuestoDefault: 21,
+                    prefijoFactura: 'F'
+                };
 
-            const newFactura: Factura = {
-                id: uuidv4(),
-                empresaId,
-                clienteId,
-                numero: `${empresa.configuracion.prefijoFactura}-${nextFolio}`,
-                serie: serie || empresa.configuracion.prefijoFactura,
-                folio: nextFolio,
-                fechaEmision: new Date(fechaEmision || Date.now()),
-                fechaVencimiento: new Date(fechaVencimiento || Date.now()),
-                fechaPago: null,
-                estado: 'pendiente',
-                tipo: tipo || 'ingreso',
-                metodoPago: metodosPago || 'transferencia',
-                subtotal: totals.subtotal,
-                impuestos: totals.impuestos,
-                total: totals.total,
-                moneda: moneda || empresa.configuracion.monedaDefault,
-                notas: notas || '',
-                items: totals.items,
-                pagos: []
-            };
+                const nextFolio = (configuracion.numeracionActual || 0) + 1;
+                const totals = FinanceUtils.calculateInvoiceTotals(items);
 
-            // Update company folio
-            empresa.configuracion.numeracionActual = nextFolio;
-            await Database.write(db);
+                const newFactura = await tx.factura.create({
+                    data: {
+                        id: uuidv4(),
+                        empresaId,
+                        clienteId,
+                        numero: `${configuracion.prefijoFactura}-${nextFolio}`,
+                        serie: serie || configuracion.prefijoFactura,
+                        folio: nextFolio,
+                        fechaEmision: new Date(fechaEmision || Date.now()),
+                        fechaVencimiento: new Date(fechaVencimiento || Date.now()),
+                        estado: 'pendiente',
+                        tipo: tipo || 'ingreso',
+                        metodoPago: metodosPago || 'transferencia',
+                        subtotal: totals.subtotal,
+                        impuestos: totals.impuestos,
+                        total: totals.total,
+                        moneda: moneda || configuracion.monedaDefault,
+                        notas: notas || '',
+                        items: totals.items as any,
+                    }
+                });
 
-            await Database.saveToCollection('facturas', newFactura);
-            res.status(201).json(newFactura);
+                // Actualizar folio en la empresa
+                await tx.empresa.update({
+                    where: { id: empresaId },
+                    data: {
+                        configuracion: {
+                            ...configuracion,
+                            numeracionActual: nextFolio
+                        }
+                    }
+                });
+
+                return newFactura;
+            });
+
+            res.status(201).json(result);
         } catch (error) {
-            res.status(500).json({ message: 'Error en el servidor', error });
+            console.error('Error creating invoice:', error);
+            res.status(500).json({ message: 'Error en el servidor', error: (error as any).message });
         }
     },
 
     async getById(req: any, res: Response) {
         try {
             const { id } = req.params;
-            const facturas = await Database.getCollection<Factura>('facturas');
-            const factura = facturas.find(f => f.id === id && (req.user.rol === 'super_admin' || f.empresaId === req.user.empresaId));
+            const factura = await prisma.factura.findFirst({
+                where: {
+                    id,
+                    ...(req.user.rol !== 'super_admin' ? { empresaId: req.user.empresaId } : {})
+                },
+                include: {
+                    cliente: true,
+                    pagos: true
+                }
+            });
 
             if (!factura) return res.status(404).json({ message: 'Factura no encontrada' });
             res.json(factura);
@@ -165,28 +190,31 @@ export const FacturasController = {
             const updateData = req.body;
             const empresaId = req.user.empresaId;
 
-            const db = await Database.read();
-            const index = db.facturas.findIndex(f => f.id === id && (req.user.rol === 'super_admin' || f.empresaId === empresaId));
+            const factura = await prisma.factura.findFirst({
+                where: {
+                    id,
+                    ...(req.user.rol !== 'super_admin' ? { empresaId } : {})
+                }
+            });
 
-            if (index === -1) return res.status(404).json({ message: 'Factura no encontrada' });
+            if (!factura) return res.status(404).json({ message: 'Factura no encontrada' });
 
             // Solo permitimos actualizar ciertos campos para no romper la integridad financiera
-            const { clienteId, estado, categoria, notas, moneda, emisorNombre, numero } = updateData;
+            const { clienteId, estado, categoria, notas, moneda, numero } = updateData;
 
-            db.facturas[index] = {
-                ...db.facturas[index],
-                ...(clienteId && { clienteId }),
-                ...(estado && { estado }),
-                ...(categoria && { categoria }),
-                ...(notas !== undefined && { notas }),
-                ...(moneda && { moneda }),
-                ...(emisorNombre && { emisorNombre }),
-                ...(numero && { numero }),
-                updatedAt: new Date()
-            };
+            const updatedFactura = await prisma.factura.update({
+                where: { id },
+                data: {
+                    ...(clienteId && { clienteId }),
+                    ...(estado && { estado }),
+                    ...(categoria && { categoria }),
+                    ...(notas !== undefined && { notas }),
+                    ...(moneda && { moneda }),
+                    ...(numero && { numero })
+                }
+            });
 
-            await Database.write(db);
-            res.json(db.facturas[index]);
+            res.json(updatedFactura);
         } catch (error) {
             res.status(500).json({ message: 'Error en el servidor', error });
         }
@@ -197,14 +225,17 @@ export const FacturasController = {
             const { id } = req.params;
             const { estado } = req.body;
 
-            const db = await Database.read();
-            const factura = db.facturas.find(f => f.id === id && (req.user.rol === 'super_admin' || f.empresaId === req.user.empresaId));
+            const updated = await prisma.factura.updateMany({
+                where: {
+                    id,
+                    ...(req.user.rol !== 'super_admin' ? { empresaId: req.user.empresaId } : {})
+                },
+                data: { estado }
+            });
 
-            if (!factura) return res.status(404).json({ message: 'Factura no encontrada' });
+            if (updated.count === 0) return res.status(404).json({ message: 'Factura no encontrada' });
 
-            factura.estado = estado;
-            await Database.write(db);
-            res.json(factura);
+            res.json({ id, estado });
         } catch (error) {
             res.status(500).json({ message: 'Error en el servidor', error });
         }
@@ -215,34 +246,39 @@ export const FacturasController = {
             const { id } = req.params;
             const empresaId = req.user.empresaId;
 
-            const db = await Database.read();
-            const facturaABorrar = db.facturas.find(f => f.id === id && (req.user.rol === 'super_admin' || f.empresaId === empresaId));
+            const factura = await prisma.factura.findFirst({
+                where: {
+                    id,
+                    ...(req.user.rol !== 'super_admin' ? { empresaId } : {})
+                }
+            });
 
-            if (!facturaABorrar) {
+            if (!factura) {
                 return res.status(404).json({ message: 'Factura no encontrada o sin permisos' });
             }
 
             // Eliminar archivo físico si existe
-            if (facturaABorrar.archivoOriginal) {
+            if (factura.archivoOriginal) {
                 const PROCESSED_DIR = path.join(process.cwd(), 'uploads/facturas/procesadas');
-                const filePath = path.join(PROCESSED_DIR, facturaABorrar.archivoOriginal);
+                const filePath = path.join(PROCESSED_DIR, factura.archivoOriginal);
 
                 if (fs.existsSync(filePath)) {
                     try {
                         fs.unlinkSync(filePath);
-                        console.log(`🗑️ Archivo eliminado: ${facturaABorrar.archivoOriginal}`);
+                        console.log(`🗑️ Archivo eliminado: ${factura.archivoOriginal}`);
                     } catch (err) {
                         console.error(`❌ Error al eliminar el archivo ${filePath}:`, err);
                     }
                 }
             }
 
-            db.facturas = db.facturas.filter(f => f.id !== id);
-            await Database.write(db);
+            // Eliminar de la DB
+            await prisma.factura.delete({ where: { id } });
 
             res.json({ message: 'Factura y archivo físico eliminados correctamente' });
         } catch (error) {
-            res.status(500).json({ message: 'Error al eliminar factura', error });
+            console.error('Error delete invoice:', error);
+            res.status(500).json({ message: 'Error al eliminar factura', error: (error as any).message });
         }
     }
 };

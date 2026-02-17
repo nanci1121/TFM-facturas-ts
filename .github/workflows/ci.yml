@@ -10,6 +10,26 @@ jobs:
   backend-ci:
     name: Backend CI
     runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
+      JWT_SECRET: test_secret
+
     steps:
       - uses: actions/checkout@v4
       
@@ -24,6 +44,14 @@ jobs:
         working-directory: backend
         run: npm install
         
+      - name: Prisma Generate
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Database Schema Sync
+        working-directory: backend
+        run: npx prisma db push --skip-generate
+
       - name: Run Tests
         working-directory: backend
         run: npm test

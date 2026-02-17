@@ -41,7 +41,10 @@ Petición HTTP
      middleware/auth.middleware.ts (verificación JWT)
            │
            ▼
-     database/index.ts (lectura/escritura db.json)
+     database/db.ts (Prisma Client)
+           │
+           ▼
+     PostgreSQL (Base de datos relacional)
 ```
 
 ---
@@ -51,18 +54,17 @@ Petición HTTP
 | Paquete | Versión | Propósito |
 |:--------|:--------|:----------|
 | `express` | 4.18 | Framework HTTP |
+| `prisma` | 5.22 | ORM (Type-safe query builder) |
+| `@prisma/client` | 5.22 | Cliente de base de datos generado |
 | `typescript` | 5.x | Tipado estático |
 | `ts-node-dev` | 2.0 | Hot-reload en desarrollo |
 | `jsonwebtoken` | 9.0 | Generación y verificación de tokens JWT |
 | `bcryptjs` | 2.4 | Hash seguro de contraseñas |
 | `multer` | 2.0 | Upload de archivos PDF |
 | `pdf-parse` | 2.4 | Extracción de texto desde PDFs |
-| `pdf-parse` | 2.4 | Extracción de texto desde PDFs |
 | `axios` | 1.6 | Cliente HTTP (para Ollama, Groq y Minimax) |
-| `chokidar` | 5.0 | Observador de archivos para procesamiento automático |
 | `uuid` | 9.0 | Generación de IDs únicos |
 | `dotenv` | 16.3 | Variables de entorno |
-| `cors` | 2.8 | Cross-Origin Resource Sharing |
 | `date-fns` | 2.30 | Utilidades de fechas |
 | `jest` | 30.x | Framework de testing |
 | `supertest` | 7.x | Testing de endpoints HTTP |
@@ -229,68 +231,35 @@ El servicio de ingestión (`src/ia/ingestion.service.ts`) automatiza:
 
 ---
 
+---
+
 ## 💾 Base de datos
 
-El proyecto usa un **archivo JSON** (`db.json`) como base de datos para simplicidad y portabilidad. Esto facilita el desarrollo, testing y despliegue sin necesidad de servicios externos.
+El proyecto utiliza **PostgreSQL** como motor de base de datos relacional y **Prisma** como ORM (Object-Relational Mapping). Esta combinación proporciona integridad referencial, tipos fuertes en TypeScript y un sistema de migraciones robusto.
 
-### Esquema
+### Esquema Prisma (`prisma/schema.prisma`)
 
-```json
-{
-  "usuarios": [...],
-  "empresas": [...],
-  "clientes": [...],     // Clientes + Proveedores (campo "tipo")
-  "facturas": [...],
-  "pagos": [...]
-}
+El esquema de la base de datos se define mediante el lenguaje de modelado de Prisma. Las tablas principales son:
+
+- **Empresas**: Entidad de más alto nivel para multi-tenencia.
+- **Usuarios**: Usuarios asociados a una empresa con roles específicos.
+- **Clientes**: Contactos (clientes y proveedores) asociados a la empresa.
+- **Facturas**: Documentos financieros con emisor, receptor, totales e información de extracción IA.
+- **Pagos**: Registro de transacciones asociadas a las facturas.
+
+### Acceso a datos (Prisma Client)
+
+La interacción con la base de datos se realiza a través de un cliente único exportado en `src/database/db.ts`:
+
+```typescript
+import { prisma } from '../database/db';
+
+// Ejemplo: Buscar facturas por empresa
+const facturas = await prisma.factura.findMany({
+    where: { empresaId },
+    include: { cliente: true }
+});
 ```
-
-### Modelos principales
-
-#### `Usuario`
-| Campo | Tipo | Descripción |
-|:------|:-----|:------------|
-| `id` | string (UUID) | Identificador único |
-| `email` | string | Email de acceso |
-| `password` | string | Hash bcrypt |
-| `nombre` | string | Nombre |
-| `apellido` | string | Apellido |
-| `rol` | enum | `super_admin`, `admin`, `contador`, `usuario` |
-| `empresaId` | string | Empresa asociada |
-| `activo` | boolean | Estado del usuario |
-
-#### `Cliente` (Contacto)
-| Campo | Tipo | Descripción |
-|:------|:-----|:------------|
-| `id` | string (UUID) | Identificador único |
-| `empresaId` | string | Empresa propietaria |
-| `nombre` | string | Nombre o razón social |
-| `rfc` | string | NIF/CIF |
-| `tipo` | enum | `cliente` o `proveedor` |
-| `email` | string | Email de contacto |
-| `telefono` | string | Teléfono |
-| `direccion` | string | Dirección |
-| `activo` | boolean | false = eliminado (soft delete) |
-
-#### `Factura`
-| Campo | Tipo | Descripción |
-|:------|:-----|:------------|
-| `id` | string (UUID) | Identificador único |
-| `empresaId` | string | Empresa propietaria |
-| `clienteId` | string | Contacto asociado |
-| `tipo` | enum | `ingreso` o `gasto` |
-| `numero` | string | Número de factura |
-| `total` | number | Importe total |
-| `estado` | enum | `pendiente`, `pagada`, `vencida`, `anulada` |
-| `categoria` | string | Categoría auto-asignada por IA |
-| `archivoOriginal` | string | Nombre del PDF asociado |
-| `iaProvider` | string | Proveedor de IA usado para la extracción |
-
-La clase `Database` (`src/database/index.ts`) expone métodos estáticos:
-- `read()` — Lee toda la base de datos
-- `write(data)` — Escribe toda la base de datos
-- `getCollection<T>(name)` — Obtiene una colección tipada
-- `saveToCollection<T>(name, item)` — Inserta o actualiza un ítem por ID
 
 ---
 
@@ -351,64 +320,31 @@ npx jest --coverage
 backend/
 ├── .env                        # Variables de entorno (no en git)
 ├── .env-ejemplo                # Plantilla de variables de entorno
-├── db.json                     # Base de datos JSON
+├── docker-compose.yml          # Infraestructura PostgreSQL (opcional aquí)
 ├── package.json                # Dependencias y scripts
 ├── tsconfig.json               # Configuración TypeScript
-├── uploads/                    # PDFs de facturas subidas
-│   └── facturas/
-│       └── procesadas/         # PDFs procesados (servidos estáticamente)
+├── prisma/                     # Configuración de Prisma
+│   ├── schema.prisma           # Modelado de datos
+│   └── migrations/             # Historial de cambios en la DB
 │
 └── src/
-    ├── index.ts                # Punto de entrada (levanta el servidor)
-    ├── app.ts                  # Configuración de Express, rutas, middlewares
+    ├── index.ts                # Punto de entrada
+    ├── app.ts                  # Configuración Express
     │
     ├── auth/                   # Módulo de Autenticación
-    │   ├── auth.controller.ts  # Lógica de login, registro, /me
-    │   └── auth.routes.ts      # POST /register, /login, GET /me
-    │
     ├── empresas/               # Módulo de Empresas
-    │   ├── empresas.controller.ts
-    │   └── empresas.routes.ts
-    │
-    ├── clientes/               # Módulo de Contactos (Clientes + Proveedores)
-    │   ├── clientes.controller.ts  # CRUD + stats
-    │   └── clientes.routes.ts
-    │
+    ├── clientes/               # Módulo de Contactos
     ├── facturas/               # Módulo de Facturas
-    │   ├── facturas.controller.ts  # CRUD + upload PDF
-    │   └── facturas.routes.ts
-    │
-    ├── ia/                     # Módulo de Inteligencia Artificial
-    │   ├── ia.controller.ts    # Endpoint /chat
-    │   ├── ia.routes.ts        # POST /chat, GET /status
-    │   ├── ia.service.ts       # Lógica multi-proveedor (Groq/Minimax/Ollama)
-    │   ├── ingestion.service.ts # Extracción de datos desde PDFs
-    │   └── rag.service.ts      # Retrieval-Augmented Generation
-    │
     ├── reportes/               # Módulo de Reportes
-    │   ├── reportes.controller.ts
-    │   └── reportes.routes.ts
+    ├── ia/                     # Servicios de IA y RAG
     │
     ├── database/               # Capa de Persistencia
-    │   └── index.ts            # Clase Database (lectura/escritura JSON)
-    │
-    ├── middleware/              # Middlewares
-    │   └── auth.middleware.ts   # Verificación JWT
+    │   ├── db.ts               # Instancia de Prisma Client
+    │   └── index.ts            # Wrapper de compatibilidad (opcional)
     │
     ├── types/                  # Interfaces TypeScript
-    │   └── index.ts            # Usuario, Empresa, Cliente, Factura...
-    │
-    ├── utils/                  # Utilidades
-    │   └── ...
-    │
-    ├── scripts/                # Scripts de utilidad
-    │   ├── seed.ts             # Datos de prueba
-    │   └── test-ia-connection.ts
-    │
-    └── tests/                  # Tests
-        ├── security.test.ts
-        ├── ai-extraction.test.ts
-        └── ia-rag-deep-dive.test.ts
+    ├── scripts/                # Seed y utilidades (Prisma)
+    └── tests/                  # Tests (Gest, Supertest)
 ```
 
 ---
@@ -416,4 +352,4 @@ backend/
 <p align="center">
   📖 <a href="../README.md">← Volver a la documentación general</a>
 </p>
-]]>
+```

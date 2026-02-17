@@ -10,6 +10,8 @@ FRONTEND_PID_FILE=".frontend.pid"
 
 echo "Starting Backend..."
 cd $BACKEND_DIR
+# Asegurar que el cliente de Prisma esté actualizado
+npx prisma generate
 # Start in background, redirect logs
 npm run dev > ../$BACKEND_LOG 2>&1 &
 echo $! > ../$BACKEND_PID_FILE

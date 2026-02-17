@@ -110,14 +110,14 @@ FacturaIA nace como un **Trabajo Final de Máster (TFM)** con el objetivo de dem
 │                                                      │
 │  ┌──────┐ ┌─────────┐ ┌──────────┐ ┌─────────────┐  │
 │  │ Auth │ │Facturas │ │Contactos │ │  IA Service  │  │
-│  │ JWT  │ │  CRUD   │ │  CRUD    │ │ RAG + Multi  │  │
+│  │ JWT  │ │ PRISMA  │ │ PRISMA   │ │ RAG + Multi  │  │
 │  └──────┘ └─────────┘ └──────────┘ └──────┬──────┘  │
 │         Puerto 3001                       │          │
 └────────────────────┬──────────────────────┼──────────┘
                      │                      │
               ┌──────▼──────┐       ┌───────▼───────┐
-              │   db.json   │       │  IA Providers │
-              │  (JSON DB)  │       │ Gemini / Groq │
+              │ PostgreSQL  │       │  IA Providers │
+              │ (Prisma DB) │       │ Gemini / Groq │
               └─────────────┘       │   / Ollama    │
                                     └───────────────┘
 ```
@@ -132,12 +132,13 @@ FacturaIA nace como un **Trabajo Final de Máster (TFM)** con el objetivo de dem
 | **Node.js 20+** | Runtime de servidor |
 | **Express 4.18** | Framework HTTP / API REST |
 | **TypeScript 5** | Tipado estático |
+| **Prisma ORM** | Capa de datos y modelado DB |
+| **PostgreSQL** | Base de datos relacional robusta |
 | **JWT** (jsonwebtoken) | Autenticación y autorización |
 | **bcryptjs** | Hashing de contraseñas |
 | **pdf-parse** | Extracción de texto desde PDFs |
 | **axios** | Llamadas a Ollama / Groq / Minimax |
 | **multer** | Upload de archivos (facturas PDF) |
-| **chokidar** | Observador de archivos para procesamiento automático |
 | **Jest + Supertest** | Testing unitario e integración |
 
 ### Frontend
@@ -150,7 +151,6 @@ FacturaIA nace como un **Trabajo Final de Máster (TFM)** con el objetivo de dem
 | **Zustand** | Gestión de estado global (auth, theme) |
 | **React Router 6** | Navegación SPA |
 | **Recharts** | Gráficos y visualizaciones |
-| **Lucide React** | Iconos SVG |
 | **Vitest + Testing Library** | Testing unitario y de componentes |
 
 ---
@@ -160,32 +160,36 @@ FacturaIA nace como un **Trabajo Final de Máster (TFM)** con el objetivo de dem
 ### Requisitos previos
 - **Node.js** v18 o superior ([descargar](https://nodejs.org/))
 - **npm** (incluido con Node.js)
-- (Opcional) [Ollama](https://ollama.com/) para usar IA local sin coste
+- **Docker & Docker Compose** (para PostgreSQL y Ollama)
+- (Opcional) [Ollama](https://ollama.com/) instalado localmente si no usas Docker
 
 ### Pasos
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/TU_USUARIO/facturas-proyecto.git
-cd facturas-proyecto
+git clone https://github.com/nanci1121/TFM-facturas-ts.git
+cd TFM-facturas-ts
 
-# 2. Instalar dependencias
+# 2. Levantar la base de datos y servicios
+docker-compose up -d
+
+# 3. Instalar dependencias
 cd backend && npm install
 cd ../frontend && npm install
 cd ..
 
-# 3. Configurar variables de entorno
+# 4. Configurar variables de entorno
 cp backend/.env-ejemplo backend/.env
-# Edita backend/.env con tus claves API (ver sección siguiente)
+# Edita backend/.env con DATABASE_URL y tus claves API
 
-# 4. Poblar base de datos con datos de prueba
-cd backend && npm run seed
+# 5. Ejecutar migraciones y poblar base de datos
+cd backend
+npx prisma migrate dev --name init
+npm run seed
 cd ..
 
-# 5. Iniciar la aplicación
+# 6. Iniciar la aplicación
 ./start.sh          # Linux / macOS
-# o
-./start.ps1         # Windows PowerShell
 ```
 
 ### Configuración del `.env`
@@ -193,32 +197,14 @@ cd ..
 ```env
 PORT=3001
 JWT_SECRET=tu_secreto_super_seguro_aqui
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/facturas_db?schema=public"
 
-# IA Configuration (elige uno o varios)
+# IA Configuration
 IA_DEFAULT_PROVIDER=auto
 
-# Local IA (Ollama) — gratuito, requiere Ollama instalado
+# Local IA (Ollama)
 OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
-
-# Cloud IA (Minimax) — potente alternativa
-MINIMAX_API_KEY=tu_api_key_aqui
-MINIMAX_MODEL=M2-her
-
-# Cloud IA (Groq) — alternativa rápida y gratuita
-GROQ_API_KEY=tu_api_key_aqui
-```
-
-> 💡 **Tip**: Con `IA_DEFAULT_PROVIDER=auto`, el sistema intentará usar Groq primero, luego Minimax, y finalmente Ollama local.
-
-### Iniciar manualmente (sin scripts)
-
-```bash
-# Terminal 1 — Backend (puerto 3001)
-cd backend && npm run dev
-
-# Terminal 2 — Frontend (puerto 3000)
-cd frontend && npm run dev
 ```
 
 ---
@@ -234,16 +220,6 @@ Una vez levantado, abre el navegador en **http://localhost:3000**
 |-------|-------|
 | Email | `admin@sistema.com` |
 | Contraseña | `admin123` |
-
-### Flujo típico
-
-1. **Inicia sesión** con las credenciales de prueba.
-2. **Dashboard**: Revisa los KPIs y gráficos de tu empresa.
-3. **Facturas → Subir Gasto**: Arrastra un PDF de una factura recibida. La IA extraerá automáticamente emisor, importe, fecha y categoría.
-4. **Facturas → Nueva Factura**: Crea una factura de ingreso manualmente.
-5. **Contactos**: Gestiona tus clientes y proveedores.
-6. **IA Assistant**: Pregunta cualquier cosa sobre tus finanzas en lenguaje natural.
-7. **Reportes**: Consulta análisis detallados de ingresos y gastos.
 
 ---
 
@@ -264,10 +240,9 @@ cd frontend && npx vitest --ui
 
 | Test | Ubicación | Descripción |
 |------|-----------|-------------|
-| `security.test.ts` | `backend/src/tests/` | Autenticación JWT, protección de rutas |
-| `ai-extraction.test.ts` | `backend/src/tests/` | Extracción de datos de facturas con IA |
-| `ia-rag-deep-dive.test.ts` | `backend/src/tests/` | Contexto RAG y respuestas de la IA |
-| `Sidebar.test.tsx` | `frontend/src/components/` | Renderizado correcto de la navegación |
+| `security.test.ts` | `backend/src/tests/` | Autenticación JWT, protección de rutas y multi-tenencia |
+| `ai-extraction.test.ts` | `backend/src/tests/` | Extracción de datos de facturas con IA (Prisma mocks) |
+| `facturas.integration.test.ts` | `backend/src/tests/` | Integración real Facturas <-> PostgreSQL |
 
 ---
 
@@ -275,10 +250,8 @@ cd frontend && npx vitest --ui
 
 El proyecto incluye un pipeline de **GitHub Actions** (`.github/workflows/ci.yml`) que se ejecuta en cada push o PR a `main`:
 
-1. **Backend CI**: Instala dependencias → Ejecuta tests → Compila TypeScript.
+1. **Backend CI**: Instala dependencias → Sincroniza Prisma → Ejecuta tests → Compila TypeScript.
 2. **Frontend CI**: Instala dependencias → Ejecuta tests → Build de producción.
-
-Esto garantiza que cada cambio en el repositorio mantenga la calidad del código.
 
 ---
 
@@ -288,44 +261,27 @@ Esto garantiza que cada cambio en el repositorio mantenga la calidad del código
 facturas-proyecto/
 ├── README.md                    # ← Este archivo
 ├── start.sh / start.ps1        # Scripts de inicio rápido
-├── stop.sh / stop.ps1          # Scripts para detener servicios
+├── docker-compose.yml          # Infraestructura (Postgres, Ollama, pgAdmin)
 ├── .github/workflows/ci.yml    # Pipeline CI/CD
 │
 ├── backend/                    # API REST + IA
 │   ├── README.md               # Documentación del backend
-│   ├── .env-ejemplo            # Variables de entorno de ejemplo
-│   ├── db.json                 # Base de datos JSON
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── src/
-│       ├── app.ts              # Configuración Express
-│       ├── index.ts            # Punto de entrada
-│       ├── auth/               # Autenticación (login, registro, JWT)
-│       ├── empresas/           # Gestión de empresas
-│       ├── clientes/           # Gestión de contactos (clientes/proveedores)
-│       ├── facturas/           # CRUD de facturas
-│       ├── ia/                 # Servicios de IA (extracción, chat, RAG)
-│       ├── reportes/           # Generación de reportes
-│       ├── database/           # Capa de persistencia (JSON)
-│       ├── middleware/         # Middleware de autenticación
-│       ├── types/              # Interfaces TypeScript
-│       ├── scripts/            # Seed y utilidades
-│       └── tests/              # Tests unitarios e integración
+│   ├── prisma/                 # Esquema (schema.prisma) y migraciones
+│   ├── src/
+│   │   ├── auth/               # Autenticación y JWT
+│   │   ├── clientes/           # Gestión de contactos (Prisma)
+│   │   ├── facturas/           # Gestión de facturas (Prisma)
+│   │   ├── ia/                 # IA (extracción, chat, RAG)
+│   │   ├── reportes/           # KPIs y estadísticas financieras
+│   │   ├── database/           # Cliente Prisma unificado (db.ts)
+│   │   └── tests/              # Tests unitarios e integración
 │
-└── frontend/                   # Interfaz web
-    ├── README.md               # Documentación del frontend
-    ├── package.json
-    ├── vite.config.ts
-    ├── tailwind.config.js
-    └── src/
-        ├── App.tsx             # Rutas y componente raíz
-        ├── main.tsx            # Punto de entrada React
-        ├── index.css           # Estilos globales Tailwind
-        ├── pages/              # Páginas (Dashboard, Facturas, Contactos...)
-        ├── components/         # Componentes reutilizables
-        ├── services/           # Cliente HTTP (axios)
-        ├── store/              # Estado global (Zustand)
-        └── test/               # Tests de componentes
+└── frontend/                   # Interfaz web (React)
+    ├── src/
+    │   ├── pages/              # Dashboard, Facturas, Clientes, Chat...
+    │   ├── components/         # Componentes UI reutilizables
+    │   ├── services/           # Cliente API (axios)
+    │   └── store/              # Estado global (Zustand)
 ```
 
 ---

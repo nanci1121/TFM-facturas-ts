@@ -67,6 +67,7 @@ async function seed() {
         contacto: 'Juan Pérez',
         notas: 'Cliente preferencial',
         activo: true,
+        tipo: 'cliente',
     });
 
     // 4. Crear Facturas
@@ -81,6 +82,7 @@ async function seed() {
         fechaVencimiento: new Date('2026-02-15'),
         fechaPago: new Date('2026-01-20'),
         estado: 'pagada',
+        tipo: 'ingreso',
         metodoPago: 'transferencia',
         subtotal: 1000,
         impuestos: 160,
@@ -104,6 +106,7 @@ async function seed() {
         fechaVencimiento: new Date('2026-02-28'),
         fechaPago: null,
         estado: 'pendiente',
+        tipo: 'ingreso',
         metodoPago: 'transferencia',
         subtotal: 5000,
         impuestos: 800,

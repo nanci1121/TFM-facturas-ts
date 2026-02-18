@@ -1,7 +1,17 @@
-version: '3.8'
+# ============================================================
+# FacturaIA — Docker Compose
+#
+# Modos de uso:
+#   Desarrollo:  docker compose up -d postgres
+#   Producción:  docker compose --profile production up -d --build
+#   Con Ollama:  docker compose --profile production --profile local up -d --build
+# ============================================================
 
 services:
+
+  # ──────────────────────────────────────────
   # Base de datos PostgreSQL
+  # ──────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: facturas_postgres
@@ -11,15 +21,20 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-admin123}
       POSTGRES_DB: ${DB_NAME:-facturas_db}
     ports:
-      # Puerto Host : Puerto Contenedor
-      # Cambiamos el puerto host a uno menos común (ej. 5433) para evitar conflictos
       - "${DB_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - facturas-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-facturas_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Interfaz gráfica (pgAdmin)
+  # ──────────────────────────────────────────
+  # Interfaz gráfica de base de datos (pgAdmin)
+  # ──────────────────────────────────────────
   pgadmin:
     image: dpage/pgadmin4
     container_name: facturas_pgadmin
@@ -30,12 +45,17 @@ services:
     ports:
       - "${PGADMIN_PORT:-5050}:80"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - facturas-network
 
-  # IA Local (Ollama)
+  # ──────────────────────────────────────────
+  # IA Local (Ollama) — solo con --profile local
+  # No se usa en producción (consume demasiada RAM)
+  # ──────────────────────────────────────────
   ollama:
+    profiles: [ "local" ]
     image: ollama/ollama:latest
     container_name: facturas_ollama
     restart: always
@@ -45,19 +65,74 @@ services:
       - ollama_data:/root/.ollama
     networks:
       - facturas-network
-    # Descomentar para soporte GPU (Nvidia)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
 
+  # ──────────────────────────────────────────
+  # Backend (API REST + IA)
+  # Solo se levanta con: --profile production
+  # ──────────────────────────────────────────
+  backend:
+    profiles: [ "production" ]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: facturas_backend
+    restart: always
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-admin}:${DB_PASSWORD:-admin123}@postgres:5432/${DB_NAME:-facturas_db}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-cambia_esto_en_produccion}
+      # Prioridad IA: minimax → groq → openrouter → ollama
+      IA_DEFAULT_PROVIDER: ${IA_DEFAULT_PROVIDER:-minimax}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      MINIMAX_MODEL: ${MINIMAX_MODEL:-M2-her}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      OPEN_ROUTER_API_KEY: ${OPEN_ROUTER_API_KEY:-}
+      # Ollama apunta a localhost si no hay contenedor local
+      OLLAMA_URL: ${OLLAMA_URL:-http://localhost:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - facturas-network
+
+  # ──────────────────────────────────────────
+  # Frontend (React + Nginx)
+  # Solo se levanta con: --profile production
+  # ──────────────────────────────────────────
+  frontend:
+    profiles: [ "production" ]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+    container_name: facturas_frontend
+    restart: always
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - facturas-network
+
+# ──────────────────────────────────────────
+# Redes
+# ──────────────────────────────────────────
 networks:
   facturas-network:
     driver: bridge
 
+# ──────────────────────────────────────────
+# Volúmenes persistentes
+# ──────────────────────────────────────────
 volumes:
   postgres_data:
   ollama_data:
+  uploads_data:

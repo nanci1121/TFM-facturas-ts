@@ -2,7 +2,9 @@
 description: Cómo poblar la base de datos con datos de prueba iniciales
 ---
 
-Este workflow limpia la base de datos `db.json` y carga empresas, usuarios y facturas de ejemplo.
+Este workflow ejecuta el script de seed de Prisma que crea empresas, usuarios y facturas de ejemplo en PostgreSQL.
+
+**Requisito previo**: La base de datos debe estar corriendo (`docker-compose up -d postgres`).
 
 // turbo
 1. Ejecutar el script de seed:

@@ -1,4 +1,4 @@
-<![CDATA[# 🔧 FacturaIA — Backend
+# 🔧 FacturaIA — Backend
 
 API REST construida con **Node.js + Express + TypeScript** que gestiona facturas, contactos, empresas y autenticación, con un sistema de IA dual integrado para la extracción automática de datos y un asistente conversacional con RAG.
 
@@ -16,6 +16,7 @@ API REST construida con **Node.js + Express + TypeScript** que gestiona facturas
 - [Autenticación y roles](#-autenticación-y-roles)
 - [Testing](#-testing)
 - [Scripts disponibles](#-scripts-disponibles)
+- [Despliegue en producción](#-despliegue-en-producción)
 - [Estructura de archivos](#-estructura-de-archivos)
 
 ---
@@ -84,6 +85,9 @@ npm install
 cp .env-ejemplo .env
 # Edita .env con tus valores (ver sección siguiente)
 
+# Ejecutar migraciones de base de datos
+npx prisma migrate dev --name init
+
 # Poblar la base de datos con datos de prueba
 npm run seed
 
@@ -104,6 +108,9 @@ Crea un archivo `.env` basándote en `.env-ejemplo`:
 PORT=3001
 JWT_SECRET=tu_secreto_super_seguro_aqui
 
+# Base de datos (PostgreSQL)
+DATABASE_URL="postgresql://admin:admin123@localhost:5433/facturas_db?schema=public"
+
 # Configuración IA
 IA_DEFAULT_PROVIDER=auto    # auto | groq | minimax | ollama
 
@@ -117,6 +124,9 @@ MINIMAX_MODEL=M2-her
 
 # Groq (Cloud, gratuito con límites)
 GROQ_API_KEY=tu_api_key_de_groq
+
+# OpenRouter (respaldo)
+OPEN_ROUTER_API_KEY=tu_api_key_de_openrouter
 ```
 
 ### Obtener claves API gratuitas
@@ -145,11 +155,12 @@ Todos los endpoints (excepto Auth) requieren el header `Authorization: Bearer <t
 
 | Método | Ruta | Descripción |
 |:-------|:-----|:------------|
-| `GET` | `/` | Listar facturas (filtros: `tipo`, `estado`, `search`) |
+| `GET` | `/` | Listar facturas (filtros: `tipo`, `estado`, `search`, `page`) |
 | `POST` | `/` | Crear factura manualmente |
 | `POST` | `/upload` | Subir PDF → extracción con IA |
 | `GET` | `/:id` | Obtener factura por ID |
 | `PUT` | `/:id` | Actualizar factura |
+| `PATCH` | `/:id/estado` | Actualizar solo el estado |
 | `DELETE` | `/:id` | Eliminar factura |
 
 ### Contactos (`/api/v1/contactos`)
@@ -181,7 +192,11 @@ Todos los endpoints (excepto Auth) requieren el header `Authorization: Bearer <t
 
 | Método | Ruta | Descripción |
 |:-------|:-----|:------------|
-| `GET` | `/resumen` | Informe financiero completo |
+| `GET` | `/resumen` | Informe financiero completo (KPIs) |
+| `GET` | `/estadisticas-mensuales` | Evolución mensual (últimos 6 meses) |
+| `GET` | `/distribucion-estados` | Distribución por estado de facturas |
+| `GET` | `/facturas-recientes` | Últimas 5 facturas |
+| `GET` | `/alertas` | Facturas vencidas y por vencer |
 | `GET` | `/categorias` | Desglose por categorías |
 
 ### Health Check
@@ -206,9 +221,11 @@ Petición de IA
      │── Sí → Usar Groq (llama3)
      │── No ──▶ ¿Minimax API Key configurada?
                   │── Sí → Usar Minimax (M2-her)
-                  │── No ──▶ ¿Ollama disponible?
-                               │── Sí → Usar Ollama (modelo local)
-                               │── No → Error: sin proveedor disponible
+                  │── No ──▶ ¿OpenRouter API Key configurada?
+                               │── Sí → Usar OpenRouter
+                               │── No ──▶ ¿Ollama disponible?
+                                            │── Sí → Usar Ollama (modelo local)
+                                            │── No → Error: sin proveedor disponible
 ```
 
 ### RAG (Retrieval-Augmented Generation)
@@ -231,15 +248,13 @@ El servicio de ingestión (`src/ia/ingestion.service.ts`) automatiza:
 
 ---
 
----
-
 ## 💾 Base de datos
 
-El proyecto utiliza **PostgreSQL** como motor de base de datos relacional y **Prisma** como ORM (Object-Relational Mapping). Esta combinación proporciona integridad referencial, tipos fuertes en TypeScript y un sistema de migraciones robusto.
+El proyecto utiliza **PostgreSQL 15** como motor de base de datos relacional y **Prisma 5** como ORM. Esta combinación proporciona integridad referencial, tipos fuertes en TypeScript y un sistema de migraciones robusto.
 
 ### Esquema Prisma (`prisma/schema.prisma`)
 
-El esquema de la base de datos se define mediante el lenguaje de modelado de Prisma. Las tablas principales son:
+Las tablas principales son:
 
 - **Empresas**: Entidad de más alto nivel para multi-tenencia.
 - **Usuarios**: Usuarios asociados a una empresa con roles específicos.
@@ -259,6 +274,22 @@ const facturas = await prisma.factura.findMany({
     where: { empresaId },
     include: { cliente: true }
 });
+```
+
+### Comandos útiles de Prisma
+
+```bash
+# Generar el cliente Prisma (tras cambios en schema.prisma)
+npx prisma generate
+
+# Crear y aplicar una nueva migración
+npx prisma migrate dev --name nombre_migracion
+
+# Aplicar migraciones en producción (sin crear nuevas)
+npx prisma migrate deploy
+
+# Ver el estado de la base de datos
+npx prisma studio
 ```
 
 ---
@@ -297,7 +328,7 @@ npx jest --coverage
 |:--------|:------------|
 | `security.test.ts` | Verifica autenticación JWT, registro, login, protección de rutas no autenticadas |
 | `ai-extraction.test.ts` | Verifica la extracción de datos desde texto de facturas |
-| `ia-rag-deep-dive.test.ts` | Verifica el contexto RAG y la calidad de respuestas de la IA |
+| `facturas.integration.test.ts` | Integración real Facturas <-> PostgreSQL |
 
 ---
 
@@ -314,13 +345,33 @@ npx jest --coverage
 
 ---
 
+## 🐳 Despliegue en producción
+
+El backend incluye un `Dockerfile` multi-stage optimizado para producción:
+
+```bash
+# Construir la imagen manualmente
+docker build -t facturaia-backend ./backend
+
+# O usar docker-compose desde la raíz del proyecto
+docker-compose --profile production up -d --build backend
+```
+
+En producción, el backend:
+1. Compila TypeScript a JavaScript (`npm run build`).
+2. Ejecuta el servidor con `node dist/index.js`.
+3. Se conecta a PostgreSQL mediante la variable `DATABASE_URL`.
+4. Sirve los archivos subidos (PDFs) desde el volumen `uploads`.
+
+---
+
 ## 📁 Estructura de archivos
 
 ```
 backend/
 ├── .env                        # Variables de entorno (no en git)
 ├── .env-ejemplo                # Plantilla de variables de entorno
-├── docker-compose.yml          # Infraestructura PostgreSQL (opcional aquí)
+├── Dockerfile                  # Imagen Docker para producción
 ├── package.json                # Dependencias y scripts
 ├── tsconfig.json               # Configuración TypeScript
 ├── prisma/                     # Configuración de Prisma
@@ -340,11 +391,11 @@ backend/
     │
     ├── database/               # Capa de Persistencia
     │   ├── db.ts               # Instancia de Prisma Client
-    │   └── index.ts            # Wrapper de compatibilidad (opcional)
+    │   └── index.ts            # Wrapper de compatibilidad
     │
     ├── types/                  # Interfaces TypeScript
     ├── scripts/                # Seed y utilidades (Prisma)
-    └── tests/                  # Tests (Gest, Supertest)
+    └── tests/                  # Tests (Jest, Supertest)
 ```
 
 ---
@@ -352,4 +403,3 @@ backend/
 <p align="center">
   📖 <a href="../README.md">← Volver a la documentación general</a>
 </p>
-```

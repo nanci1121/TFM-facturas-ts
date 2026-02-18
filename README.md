@@ -1,4 +1,4 @@
-<![CDATA[# 🧾 FacturaIA — Sistema Inteligente de Gestión de Facturas
+# 🧾 FacturaIA — Sistema Inteligente de Gestión de Facturas
 
 <p align="center">
   <img src="https://img.shields.io/badge/TypeScript-5.2-blue?logo=typescript" alt="TypeScript" />
@@ -7,6 +7,9 @@
   <img src="https://img.shields.io/badge/Express-4.18-000000?logo=express" alt="Express" />
   <img src="https://img.shields.io/badge/Vite-5.0-646CFF?logo=vite" alt="Vite" />
   <img src="https://img.shields.io/badge/TailwindCSS-3.3-06B6D4?logo=tailwindcss" alt="Tailwind" />
+  <img src="https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/Prisma-5.22-2D3748?logo=prisma" alt="Prisma" />
+  <img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker" alt="Docker" />
   <img src="https://img.shields.io/badge/License-AGPL%20v3-blue" alt="AGPL v3 License" />
 </p>
 
@@ -22,6 +25,7 @@
 - [Arquitectura del proyecto](#-arquitectura-del-proyecto)
 - [Stack tecnológico](#-stack-tecnológico)
 - [Instalación rápida](#-instalación-rápida)
+- [Despliegue con Docker (Producción)](#-despliegue-con-docker-producción)
 - [Uso](#-uso)
 - [Testing](#-testing)
 - [CI/CD](#-cicd)
@@ -100,7 +104,7 @@ FacturaIA nace como un **Trabajo Final de Máster (TFM)** con el objetivo de dem
 │  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌────────┐ │
 │  │Dashboard│  │ Facturas │  │Contactos│  │IA Chat │ │
 │  └─────────┘  └──────────┘  └─────────┘  └────────┘ │
-│         Puerto 3000 (Vite Dev Server)                │
+│         Puerto 3000 (Nginx en producción)            │
 └────────────────────┬─────────────────────────────────┘
                      │ HTTP REST (axios)
                      ▼
@@ -117,7 +121,7 @@ FacturaIA nace como un **Trabajo Final de Máster (TFM)** con el objetivo de dem
                      │                      │
               ┌──────▼──────┐       ┌───────▼───────┐
               │ PostgreSQL  │       │  IA Providers │
-              │ (Prisma DB) │       │ Gemini / Groq │
+              │ (Prisma ORM)│       │ Groq / Minimax│
               └─────────────┘       │   / Ollama    │
                                     └───────────────┘
 ```
@@ -132,8 +136,8 @@ FacturaIA nace como un **Trabajo Final de Máster (TFM)** con el objetivo de dem
 | **Node.js 20+** | Runtime de servidor |
 | **Express 4.18** | Framework HTTP / API REST |
 | **TypeScript 5** | Tipado estático |
-| **Prisma ORM** | Capa de datos y modelado DB |
-| **PostgreSQL** | Base de datos relacional robusta |
+| **Prisma ORM 5.22** | Capa de datos y modelado DB |
+| **PostgreSQL 15** | Base de datos relacional robusta |
 | **JWT** (jsonwebtoken) | Autenticación y autorización |
 | **bcryptjs** | Hashing de contraseñas |
 | **pdf-parse** | Extracción de texto desde PDFs |
@@ -153,15 +157,21 @@ FacturaIA nace como un **Trabajo Final de Máster (TFM)** con el objetivo de dem
 | **Recharts** | Gráficos y visualizaciones |
 | **Vitest + Testing Library** | Testing unitario y de componentes |
 
+### Infraestructura
+| Tecnología | Propósito |
+|:-----------|:----------|
+| **Docker + Docker Compose** | Contenedores para despliegue reproducible |
+| **Nginx** | Servidor web para el frontend en producción |
+| **GitHub Actions** | Pipeline CI/CD automatizado |
+
 ---
 
-## 🚀 Instalación rápida
+## 🚀 Instalación rápida (Desarrollo local)
 
 ### Requisitos previos
 - **Node.js** v18 o superior ([descargar](https://nodejs.org/))
 - **npm** (incluido con Node.js)
 - **Docker & Docker Compose** (para PostgreSQL y Ollama)
-- (Opcional) [Ollama](https://ollama.com/) instalado localmente si no usas Docker
 
 ### Pasos
 
@@ -170,8 +180,8 @@ FacturaIA nace como un **Trabajo Final de Máster (TFM)** con el objetivo de dem
 git clone https://github.com/nanci1121/TFM-facturas-ts.git
 cd TFM-facturas-ts
 
-# 2. Levantar la base de datos y servicios
-docker-compose up -d
+# 2. Levantar la base de datos y servicios de infraestructura
+docker-compose up -d postgres
 
 # 3. Instalar dependencias
 cd backend && npm install
@@ -197,7 +207,7 @@ cd ..
 ```env
 PORT=3001
 JWT_SECRET=tu_secreto_super_seguro_aqui
-DATABASE_URL="postgresql://postgres:postgres@localhost:5433/facturas_db?schema=public"
+DATABASE_URL="postgresql://admin:admin123@localhost:5433/facturas_db?schema=public"
 
 # IA Configuration
 IA_DEFAULT_PROVIDER=auto
@@ -205,21 +215,82 @@ IA_DEFAULT_PROVIDER=auto
 # Local IA (Ollama)
 OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
+
+# Cloud IA (opcional)
+GROQ_API_KEY=tu_api_key_de_groq
+MINIMAX_API_KEY=tu_api_key_de_minimax
 ```
+
+---
+
+## 🐳 Despliegue con Docker (Producción)
+
+Para desplegar la aplicación completa en un servidor (ej. Debian), usa el perfil de producción:
+
+```bash
+# 1. Clonar el repositorio en el servidor
+git clone https://github.com/nanci1121/TFM-facturas-ts.git
+cd TFM-facturas-ts
+
+# 2. Crear el archivo de variables de entorno de producción
+cp backend/.env-ejemplo backend/.env
+# Edita backend/.env con valores seguros para producción
+
+# 3. Levantar todos los servicios (BD + Backend + Frontend)
+docker-compose --profile production up -d --build
+
+# 4. Ejecutar migraciones y seed (solo la primera vez)
+docker-compose exec backend npx prisma migrate deploy
+docker-compose exec backend npm run seed
+```
+
+Los servicios estarán disponibles en:
+- **Frontend**: `http://tu-servidor:4000` (o `http://localhost:4000` en local)
+- **Backend API**: `http://tu-servidor:4001`
+- **pgAdmin**: `http://tu-servidor:5050`
+
+Consulta la [guía de despliegue completa](backend/README.md#despliegue-en-producción) para más detalles.
 
 ---
 
 ## 📖 Uso
 
-### Acceso inicial
+### Acceso y Credenciales
 
-Una vez levantado, abre el navegador en **http://localhost:3000**
+Una vez desplegada la aplicación, puedes acceder a ella a través de las siguientes URLs:
 
-**Credenciales por defecto** (tras ejecutar `npm run seed`):
-| Campo | Valor |
-|-------|-------|
-| Email | `admin@sistema.com` |
-| Contraseña | `admin123` |
+| Servicio | URL Local (Dev) | URL Servidor (Prod) | Descripción |
+|---|---|---|---|
+| **Frontend (App)** | `http://localhost:3000` | `http://tu-servidor:4000` | Interfaz de usuario principal |
+| **Backend (API)** | `http://localhost:3001` | `http://tu-servidor:4001` | API REST y documentación |
+| **pgAdmin (DB)** | `http://localhost:5050` | `http://tu-servidor:5050` | Gestión visual de la base de datos |
+
+#### 🔑 Usuario Administrador por Defecto
+
+El sistema se inicializa con un usuario administrador preconfigurado para pruebas:
+
+- **Email:** `admin@sistema.com`
+- **Contraseña:** `admin123`
+
+> **Nota:** Este usuario tiene permisos completos sobre todas las empresas y configuraciones.
+
+#### 👤 Crear Nuevos Usuarios
+
+Actualmente el registro público está deshabilitado por seguridad en el frontend. Para crear nuevos usuarios, tienes dos opciones:
+
+1. **Usando la API (Postman / Curl):**
+   ```bash
+   curl -X POST http://tu-servidor:4001/api/auth/register \
+     -H "Content-Type: application/json" \
+     -d '{
+       "email": "nuevo@usuario.com",
+       "password": "password123",
+       "nombre": "Profesor Evaluador"
+     }'
+   ```
+
+2. **Accediendo a la base de datos:**
+   Opcionalmente puedes insertar usuarios directamente usando **pgAdmin** en el puerto 5050 (Credentials: `admin@admin.com` / `admin123`).
 
 ---
 
@@ -250,8 +321,10 @@ cd frontend && npx vitest --ui
 
 El proyecto incluye un pipeline de **GitHub Actions** (`.github/workflows/ci.yml`) que se ejecuta en cada push o PR a `main`:
 
-1. **Backend CI**: Instala dependencias → Sincroniza Prisma → Ejecuta tests → Compila TypeScript.
+1. **Backend CI**: Instala dependencias → Genera Prisma Client → Sincroniza esquema DB → Ejecuta tests → Compila TypeScript.
 2. **Frontend CI**: Instala dependencias → Ejecuta tests → Build de producción.
+
+Para configurar los secretos necesarios en GitHub, consulta el workflow `/setup-cicd`.
 
 ---
 
@@ -260,28 +333,31 @@ El proyecto incluye un pipeline de **GitHub Actions** (`.github/workflows/ci.yml
 ```
 facturas-proyecto/
 ├── README.md                    # ← Este archivo
-├── start.sh / start.ps1        # Scripts de inicio rápido
-├── docker-compose.yml          # Infraestructura (Postgres, Ollama, pgAdmin)
+├── start.sh / start.ps1        # Scripts de inicio rápido (desarrollo)
+├── stop.sh / stop.ps1          # Scripts de parada
+├── docker-compose.yml          # Infraestructura completa (dev + producción)
 ├── .github/workflows/ci.yml    # Pipeline CI/CD
 │
 ├── backend/                    # API REST + IA
 │   ├── README.md               # Documentación del backend
+│   ├── Dockerfile              # Imagen Docker del backend
 │   ├── prisma/                 # Esquema (schema.prisma) y migraciones
-│   ├── src/
-│   │   ├── auth/               # Autenticación y JWT
-│   │   ├── clientes/           # Gestión de contactos (Prisma)
-│   │   ├── facturas/           # Gestión de facturas (Prisma)
-│   │   ├── ia/                 # IA (extracción, chat, RAG)
-│   │   ├── reportes/           # KPIs y estadísticas financieras
-│   │   ├── database/           # Cliente Prisma unificado (db.ts)
-│   │   └── tests/              # Tests unitarios e integración
+│   └── src/
+│       ├── auth/               # Autenticación y JWT
+│       ├── clientes/           # Gestión de contactos (Prisma)
+│       ├── facturas/           # Gestión de facturas (Prisma)
+│       ├── ia/                 # IA (extracción, chat, RAG)
+│       ├── reportes/           # KPIs y estadísticas financieras
+│       ├── database/           # Cliente Prisma unificado (db.ts)
+│       └── tests/              # Tests unitarios e integración
 │
 └── frontend/                   # Interfaz web (React)
-    ├── src/
-    │   ├── pages/              # Dashboard, Facturas, Clientes, Chat...
-    │   ├── components/         # Componentes UI reutilizables
-    │   ├── services/           # Cliente API (axios)
-    │   └── store/              # Estado global (Zustand)
+    ├── Dockerfile              # Imagen Docker del frontend (Nginx)
+    └── src/
+        ├── pages/              # Dashboard, Facturas, Clientes, Chat...
+        ├── components/         # Componentes UI reutilizables
+        ├── services/           # Cliente API (axios)
+        └── store/              # Estado global (Zustand)
 ```
 
 ---
@@ -314,4 +390,3 @@ Este proyecto está bajo la licencia **AGPL-3.0**. Consulta el archivo [LICENSE]
   Hecho con ❤️ como Trabajo Final de Máster<br/>
   <strong>FacturaIA</strong> — Gestión inteligente de facturas
 </p>
-]]>
